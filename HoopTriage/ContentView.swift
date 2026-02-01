@@ -208,21 +208,29 @@ struct ContentView: View {
     // MARK: - Drop handling
     
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
-        
-        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-            guard let data = item as? Data,
-                  let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-            
-            var isDir: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
-                  isDir.boolValue else { return }
-            
-            DispatchQueue.main.async {
-                store.loadFolder(url)
+        for provider in providers {
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                guard let data = item as? Data,
+                      let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                
+                var isDir: ObjCBool = false
+                FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                
+                DispatchQueue.main.async {
+                    if isDir.boolValue {
+                        // Dropped a folder — load it (handles nested folders + ignores non-video files)
+                        store.loadFolder(url)
+                    } else {
+                        // Dropped individual file(s) — load the parent folder
+                        // or add individual clips
+                        let ext = url.pathExtension.lowercased()
+                        if supportedExtensions.contains(ext) {
+                            store.addClip(url: url)
+                        }
+                    }
+                }
             }
         }
-        
         return true
     }
     

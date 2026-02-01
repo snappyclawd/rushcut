@@ -116,6 +116,15 @@ class ClipStore: ObservableObject {
         }
     }
     
+    /// Add a single clip
+    func addClip(url: URL) {
+        let ext = url.pathExtension.lowercased()
+        guard supportedExtensions.contains(ext) else { return }
+        guard !clips.contains(where: { $0.url == url }) else { return }
+        let clip = Clip(url: url)
+        clips.append(clip)
+    }
+    
     /// Update a clip's rating
     func setRating(_ rating: Int, for clipID: UUID) {
         if let index = clips.firstIndex(where: { $0.id == clipID }) {

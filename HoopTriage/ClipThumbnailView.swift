@@ -21,8 +21,18 @@ struct ClipThumbnailView: View {
     @State private var showTagPicker = false
     @State private var newTagText = ""
     @State private var audioPlayer: AVPlayer? = nil
+    @State private var lastAudioSeek: Double = -1
     
     private let scrubSize = CGSize(width: 480, height: 270)
+    
+    // Score badge colours matching the HTML version
+    private static let scoreColors: [Int: Color] = [
+        5: Color(red: 0.133, green: 0.773, blue: 0.369),  // green
+        4: Color(red: 0.518, green: 0.800, blue: 0.086),  // lime
+        3: Color(red: 0.918, green: 0.702, blue: 0.031),  // yellow
+        2: Color(red: 0.976, green: 0.451, blue: 0.086),  // orange
+        1: Color(red: 0.937, green: 0.267, blue: 0.267),  // red
+    ]
     
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +47,18 @@ struct ClipThumbnailView: View {
                             .aspectRatio(contentMode: .fill)
                             .frame(width: geo.size.width, height: geo.size.height)
                             .clipped()
+                    }
+                    
+                    // Rating badge overlay (top-left)
+                    if clip.rating > 0 {
+                        VStack {
+                            HStack {
+                                ratingBadge
+                                    .padding(6)
+                                Spacer()
+                            }
+                            Spacer()
+                        }
                     }
                     
                     // Time indicator (on hover)
@@ -73,10 +95,16 @@ struct ClipThumbnailView: View {
                 .onContinuousHover { phase in
                     switch phase {
                     case .active(let location):
+                        let wasHovering = isHovering
                         isHovering = true
                         let progress = max(0, min(1, location.x / geo.size.width))
                         hoverProgress = progress
                         currentTime = clip.duration * Double(progress)
+                        
+                        // Pre-create audio player on first hover
+                        if !wasHovering && audioEnabled {
+                            prepareAudio()
+                        }
                         
                         // Generate thumbnail
                         Task {
@@ -90,9 +118,12 @@ struct ClipThumbnailView: View {
                             }
                         }
                         
-                        // Audio scrub
+                        // Audio scrub (throttled: only seek if moved > 0.3s)
                         if audioEnabled {
-                            scrubAudio(to: currentTime)
+                            let delta = abs(currentTime - lastAudioSeek)
+                            if delta > 0.3 {
+                                seekAudio(to: currentTime)
+                            }
                         }
                         
                     case .ended:
@@ -146,23 +177,54 @@ struct ClipThumbnailView: View {
         }
     }
     
+    // MARK: - Rating Badge
+    
+    private var ratingBadge: some View {
+        let color = Self.scoreColors[clip.rating] ?? .gray
+        return HStack(spacing: 2) {
+            Text("\(clip.rating)")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+            Text("★")
+                .font(.system(size: 10))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color)
+        .cornerRadius(6)
+        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+    }
+    
     // MARK: - Audio Scrub
     
-    private func scrubAudio(to time: Double) {
+    private func prepareAudio() {
         if audioPlayer == nil {
             let playerItem = AVPlayerItem(url: clip.url)
             audioPlayer = AVPlayer(playerItem: playerItem)
             audioPlayer?.volume = 0.5
         }
-        
+    }
+    
+    private func seekAudio(to time: Double) {
+        guard let player = audioPlayer else { return }
+        lastAudioSeek = time
         let cmTime = CMTime(seconds: time, preferredTimescale: 600)
-        audioPlayer?.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: CMTime(seconds: 0.1, preferredTimescale: 600))
-        audioPlayer?.play()
+        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+            player.play()
+            // Play for 0.4s then pause to give a snippet
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                if abs(self.currentTime - time) < 0.5 {
+                    // Mouse hasn't moved much, pause
+                    player.pause()
+                }
+            }
+        }
     }
     
     private func stopAudio() {
         audioPlayer?.pause()
         audioPlayer = nil
+        lastAudioSeek = -1
     }
     
     // MARK: - Star Rating
@@ -247,7 +309,6 @@ struct ClipThumbnailView: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .cornerRadius(4)
             }
             
             Divider()
