@@ -55,7 +55,7 @@ struct ClipGridView: View {
             
             // Expanded player overlay
             if let clip = expandedClip {
-                Color.black.opacity(0.6)
+                Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .onTapGesture { expandedClip = nil }
                 
@@ -70,12 +70,12 @@ struct ClipGridView: View {
                     expandedClip = nil
                     isGridFocused = true
                 }
-                .frame(maxWidth: 1000, maxHeight: 700)
-                .padding(40)
-                .transition(.scale.combined(with: .opacity))
+                .frame(maxWidth: 1000, maxHeight: 720)
+                .padding(48)
+                .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: expandedClip?.id)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: expandedClip?.id)
         .animation(.easeInOut(duration: 0.15), value: store.gridColumns)
         .onKeyPress(.escape) {
             if expandedClip != nil {

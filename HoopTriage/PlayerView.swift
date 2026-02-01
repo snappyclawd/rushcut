@@ -98,9 +98,9 @@ struct PlayerView: View {
             // Bottom bar: rating + tag + transport info
             bottomBar
         }
-        .background(.regularMaterial)
-        .cornerRadius(12)
-        .shadow(radius: 20)
+        .background(.ultraThickMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.25), radius: 30, y: 10)
         .focused($isFocused)
         .onKeyPress(.space) { togglePlayPause(); return .handled }
         .onKeyPress(characters: .init(charactersIn: "l")) { _ in handleL(); return .handled }
@@ -161,12 +161,12 @@ struct PlayerView: View {
     
     private var headerBar: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(clip.filename)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 15, weight: .bold))
                     .lineLimit(1)
                 
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     metaItem(icon: "clock", value: clip.durationFormatted)
                     if clip.width > 0 && clip.height > 0 {
                         metaItem(icon: "rectangle", value: "\(clip.width)×\(clip.height)")
@@ -186,22 +186,28 @@ struct PlayerView: View {
                 NSWorkspace.shared.selectFile(clip.url.path, inFileViewerRootedAtPath: clip.url.deletingLastPathComponent().path)
             }) {
                 Image(systemName: "folder")
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
+                    .frame(width: 32, height: 32)
+                    .background(Color.gray.opacity(0.1))
+                    .clipShape(Circle())
             }
             .buttonStyle(.plain)
             .help("Reveal in Finder")
             
             Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
+                    .frame(width: 32, height: 32)
+                    .background(Color.gray.opacity(0.1))
+                    .clipShape(Circle())
             }
             .buttonStyle(.plain)
             .help("Close (Esc)")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
     }
     
     // MARK: - Scrub Bar
@@ -235,10 +241,10 @@ struct PlayerView: View {
                         }
                 )
             }
-            .frame(height: 6)
-            .cornerRadius(3)
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .frame(height: 5)
+            .cornerRadius(2.5)
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
             
             // Time labels + transport status
             HStack {
@@ -269,7 +275,7 @@ struct PlayerView: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.top, 4)
             .padding(.bottom, 2)
         }
@@ -278,7 +284,7 @@ struct PlayerView: View {
     // MARK: - Bottom Bar
     
     private var bottomBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             // Play/Pause button
             Button(action: { togglePlayPause() }) {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
@@ -320,8 +326,8 @@ struct PlayerView: View {
                 .font(.system(size: 10))
                 .foregroundColor(.secondary.opacity(0.4))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
     
     // MARK: - JKL Scrubbing

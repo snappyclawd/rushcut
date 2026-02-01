@@ -28,8 +28,9 @@ struct ContentView: View {
             if store.isLoading {
                 ProgressView(value: store.loadingProgress)
                     .progressViewStyle(.linear)
-                    .padding(.horizontal)
+                    .padding(.horizontal, 20)
                     .padding(.bottom, 4)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .frame(minWidth: 800, minHeight: 600)
