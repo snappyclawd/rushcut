@@ -336,4 +336,189 @@ class ClipStore: ObservableObject {
         }
         return "\(mins)m \(secs)s"
     }
+    
+    // MARK: - Export
+    
+    /// Export clips to a destination folder, organized by rating
+    func exportClips(to baseURL: URL, skipUntouched: Bool) async -> ExportResult {
+        let fm = FileManager.default
+        
+        // Create the HoopTriage export folder
+        let exportFolder = baseURL.appendingPathComponent("HoopTriage")
+        
+        // If it already exists, make a unique name
+        var finalFolder = exportFolder
+        var counter = 1
+        while fm.fileExists(atPath: finalFolder.path) {
+            finalFolder = baseURL.appendingPathComponent("HoopTriage \(counter)")
+            counter += 1
+        }
+        
+        do {
+            try fm.createDirectory(at: finalFolder, withIntermediateDirectories: true)
+        } catch {
+            return ExportResult(movedCount: 0, skippedCount: 0, errors: ["Failed to create export folder: \(error.localizedDescription)"], exportFolder: nil)
+        }
+        
+        // Determine which clips to export
+        let clipsToExport: [Clip]
+        let skippedCount: Int
+        
+        if skipUntouched {
+            clipsToExport = clips.filter { $0.rating > 0 || !$0.tags.isEmpty }
+            skippedCount = clips.count - clipsToExport.count
+        } else {
+            clipsToExport = clips
+            skippedCount = 0
+        }
+        
+        // Rating folder names
+        let ratingFolderNames: [Int: String] = [
+            5: "5-star",
+            4: "4-star",
+            3: "3-star",
+            2: "2-star",
+            1: "1-star",
+            0: "Unrated",
+        ]
+        
+        // Create rating subfolders as needed
+        var neededRatings = Set(clipsToExport.map { $0.rating })
+        for rating in neededRatings {
+            let folderName = ratingFolderNames[rating] ?? "Unrated"
+            let folderURL = finalFolder.appendingPathComponent(folderName)
+            try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        }
+        
+        // Move files
+        var movedCount = 0
+        var errors: [String] = []
+        var exportedClipData: [[String: Any]] = []
+        
+        for clip in clipsToExport {
+            let folderName = ratingFolderNames[clip.rating] ?? "Unrated"
+            let destFolder = finalFolder.appendingPathComponent(folderName)
+            var destFile = destFolder.appendingPathComponent(clip.filename)
+            
+            // Handle filename collisions
+            if fm.fileExists(atPath: destFile.path) {
+                let stem = destFile.deletingPathExtension().lastPathComponent
+                let ext = destFile.pathExtension
+                var n = 1
+                repeat {
+                    destFile = destFolder.appendingPathComponent("\(stem)_\(n).\(ext)")
+                    n += 1
+                } while fm.fileExists(atPath: destFile.path)
+            }
+            
+            do {
+                try fm.moveItem(at: clip.url, to: destFile)
+                movedCount += 1
+                
+                // Build metadata entry
+                var entry: [String: Any] = [
+                    "filename": destFile.lastPathComponent,
+                    "rating": clip.rating,
+                    "tags": Array(clip.tags).sorted(),
+                    "duration": round(clip.duration * 10) / 10,
+                    "originalPath": clip.url.path,
+                    "ratingFolder": folderName,
+                ]
+                if clip.width > 0 && clip.height > 0 {
+                    entry["resolution"] = "\(clip.width)x\(clip.height)"
+                }
+                if clip.fileSize > 0 {
+                    entry["fileSize"] = clip.fileSize
+                }
+                exportedClipData.append(entry)
+            } catch {
+                errors.append("\(clip.filename): \(error.localizedDescription)")
+            }
+        }
+        
+        // Generate tag summary
+        var tagSummary: [String: Int] = [:]
+        for clip in clipsToExport {
+            for tag in clip.tags {
+                tagSummary[tag, default: 0] += 1
+            }
+        }
+        
+        // Generate rating summary
+        var ratingSummary: [String: Int] = [:]
+        for clip in clipsToExport {
+            let key = ratingFolderNames[clip.rating] ?? "Unrated"
+            ratingSummary[key, default: 0] += 1
+        }
+        
+        // Write JSON metadata
+        let isoFormatter = ISO8601DateFormatter()
+        let metadata: [String: Any] = [
+            "exportDate": isoFormatter.string(from: Date()),
+            "appVersion": "1.0",
+            "totalClips": clipsToExport.count,
+            "skippedUntouched": skippedCount,
+            "ratingSummary": ratingSummary,
+            "tagSummary": tagSummary,
+            "clips": exportedClipData,
+        ]
+        
+        if let jsonData = try? JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys]) {
+            let jsonURL = finalFolder.appendingPathComponent("hooptriage.json")
+            try? jsonData.write(to: jsonURL)
+        }
+        
+        // Write CSV
+        var csv = "Filename,Rating,Tags,Duration,Resolution,Rating Folder,Original Path\n"
+        for entry in exportedClipData {
+            let filename = entry["filename"] as? String ?? ""
+            let rating = entry["rating"] as? Int ?? 0
+            let tags = (entry["tags"] as? [String])?.joined(separator: "; ") ?? ""
+            let duration = entry["duration"] as? Double ?? 0
+            let resolution = entry["resolution"] as? String ?? ""
+            let folder = entry["ratingFolder"] as? String ?? ""
+            let originalPath = entry["originalPath"] as? String ?? ""
+            
+            // CSV escape: wrap in quotes if contains comma/quote/newline
+            let escapedTags = "\"\(tags.replacingOccurrences(of: "\"", with: "\"\""))\""
+            let escapedPath = "\"\(originalPath.replacingOccurrences(of: "\"", with: "\"\""))\""
+            
+            csv += "\(filename),\(rating),\(escapedTags),\(duration),\(resolution),\(folder),\(escapedPath)\n"
+        }
+        
+        let csvURL = finalFolder.appendingPathComponent("hooptriage.csv")
+        try? csv.write(to: csvURL, atomically: true, encoding: .utf8)
+        
+        // Remove moved clips from the store (they're no longer at their original paths)
+        let movedIDs = Set(clipsToExport.map { $0.id })
+        clips.removeAll { movedIDs.contains($0.id) }
+        for clip in clipsToExport {
+            loadedURLs.remove(clip.url)
+        }
+        
+        // Also remove untouched clips from store if skipping them
+        if skipUntouched {
+            let untouched = clips.filter { $0.rating == 0 && $0.tags.isEmpty }
+            for clip in untouched {
+                loadedURLs.remove(clip.url)
+            }
+            clips.removeAll { $0.rating == 0 && $0.tags.isEmpty }
+        }
+        
+        return ExportResult(
+            movedCount: movedCount,
+            skippedCount: skippedCount,
+            errors: errors,
+            exportFolder: finalFolder
+        )
+    }
+}
+
+// MARK: - Export Result
+
+struct ExportResult {
+    let movedCount: Int
+    let skippedCount: Int
+    let errors: [String]
+    let exportFolder: URL?
 }

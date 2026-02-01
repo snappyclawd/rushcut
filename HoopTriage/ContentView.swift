@@ -6,6 +6,7 @@ struct ContentView: View {
     @EnvironmentObject var store: ClipStore
     @State private var isDragTargeted = false
     @State private var audioEnabled = false
+    @State private var showExport = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -34,6 +35,11 @@ struct ContentView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onDrop(of: [.fileURL], isTargeted: $isDragTargeted) { providers in
             handleDrop(providers)
+        }
+        .sheet(isPresented: $showExport) {
+            ExportView(store: store) {
+                showExport = false
+            }
         }
     }
     
@@ -110,6 +116,14 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
                         .font(.system(size: 10))
                 }
+            }
+            
+            // Export button
+            if !store.clips.isEmpty {
+                Button(action: { showExport = true }) {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .help("Export triaged clips to folders")
             }
             
             // Undo / Redo buttons
