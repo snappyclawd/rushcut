@@ -241,15 +241,9 @@ struct ContentView: View {
     
     private var dropZone: some View {
         ZStack {
-            // Warm gradient background
-            LinearGradient(
-                colors: isDragTargeted
-                    ? [Color.orange.opacity(0.08), Color.accentColor.opacity(0.06)]
-                    : [Color(nsColor: .windowBackgroundColor), Color.orange.opacity(0.03)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Clean white background
+            Color.white
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 Spacer()
@@ -389,8 +383,8 @@ struct ContentView: View {
                     .padding(32)
                     .background(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .shadow(color: .black.opacity(0.06), radius: 20, y: 8)
+                            .fill(Color.white)
+                            .shadow(color: .black.opacity(0.08), radius: 24, y: 8)
                     )
                     .frame(maxWidth: 440)
                 }
