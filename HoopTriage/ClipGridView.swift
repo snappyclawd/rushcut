@@ -12,32 +12,47 @@ struct ClipGridView: View {
     @ObservedObject var store: ClipStore
     let audioEnabled: Bool
     @State private var expandedClip: Clip? = nil
+    @State private var selectedClipID: UUID? = nil
+    @FocusState private var isGridFocused: Bool
     
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: store.gridColumns)
     }
     
+    /// The flat list of clips currently displayed (for keyboard navigation indexing)
+    private var displayedClips: [Clip] {
+        store.sortedAndFilteredClips
+    }
+    
     var body: some View {
         ZStack {
-            ScrollView {
-                if store.groupMode == .none {
-                    // Flat grid
-                    flatGrid
-                } else {
-                    // Grouped sections
-                    groupedGrid
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    if store.groupMode == .none {
+                        flatGrid
+                    } else {
+                        groupedGrid
+                    }
                 }
-            }
-            .gesture(
-                MagnifyGesture()
-                    .onEnded { value in
-                        if value.magnification > 1.2 {
-                            store.gridColumns = max(1, store.gridColumns - 1)
-                        } else if value.magnification < 0.8 {
-                            store.gridColumns = min(5, store.gridColumns + 1)
+                .gesture(
+                    MagnifyGesture()
+                        .onEnded { value in
+                            if value.magnification > 1.2 {
+                                store.gridColumns = max(1, store.gridColumns - 1)
+                            } else if value.magnification < 0.8 {
+                                store.gridColumns = min(5, store.gridColumns + 1)
+                            }
+                        }
+                )
+                .onChange(of: selectedClipID) { _, newID in
+                    if let id = newID {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            scrollProxy.scrollTo(id, anchor: .center)
                         }
                     }
-            )
+                }
+            }
+            .focused($isGridFocused)
             
             // Expanded player overlay
             if let clip = expandedClip {
@@ -45,8 +60,15 @@ struct ClipGridView: View {
                     .ignoresSafeArea()
                     .onTapGesture { expandedClip = nil }
                 
-                PlayerView(clip: clip) {
+                PlayerView(
+                    clip: clip,
+                    onRate: { rating in store.setRating(rating, for: clip.id) },
+                    onTag: { tag in store.setCategory(tag, for: clip.id) },
+                    availableTags: store.availableTags,
+                    onAddTag: { tag in store.addTag(tag) }
+                ) {
                     expandedClip = nil
+                    isGridFocused = true
                 }
                 .frame(maxWidth: 1000, maxHeight: 700)
                 .padding(40)
@@ -55,6 +77,64 @@ struct ClipGridView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: expandedClip?.id)
         .animation(.easeInOut(duration: 0.15), value: store.gridColumns)
+        .onKeyPress(.upArrow) { navigateClip(by: -store.gridColumns); return .handled }
+        .onKeyPress(.downArrow) { navigateClip(by: store.gridColumns); return .handled }
+        .onKeyPress(.leftArrow) { navigateClip(by: -1); return .handled }
+        .onKeyPress(.rightArrow) { navigateClip(by: 1); return .handled }
+        .onKeyPress(.return) {
+            if expandedClip == nil, let id = selectedClipID,
+               let clip = displayedClips.first(where: { $0.id == id }) {
+                expandedClip = clip
+            }
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            if expandedClip != nil {
+                expandedClip = nil
+                isGridFocused = true
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(characters: .init("12345")) { press in
+            guard expandedClip == nil else { return .ignored }
+            if let digit = Int(String(press.characters)), (1...5).contains(digit),
+               let id = selectedClipID {
+                store.setRating(digit, for: id)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(characters: .init("t")) { press in
+            guard expandedClip == nil else { return .ignored }
+            if let id = selectedClipID {
+                // Toggle tag picker for selected clip — we signal via store
+                store.showTagPickerForClipID = id
+                return .handled
+            }
+            return .ignored
+        }
+        .onAppear {
+            isGridFocused = true
+            if selectedClipID == nil, let first = displayedClips.first {
+                selectedClipID = first.id
+            }
+        }
+    }
+    
+    // MARK: - Keyboard Navigation
+    
+    private func navigateClip(by offset: Int) {
+        let clips = displayedClips
+        guard !clips.isEmpty else { return }
+        
+        if let currentID = selectedClipID,
+           let currentIndex = clips.firstIndex(where: { $0.id == currentID }) {
+            let newIndex = max(0, min(clips.count - 1, currentIndex + offset))
+            selectedClipID = clips[newIndex].id
+        } else {
+            selectedClipID = clips.first?.id
+        }
     }
     
     // MARK: - Flat Grid
@@ -169,6 +249,11 @@ struct ClipGridView: View {
     private func clipCard(_ clip: Clip) -> some View {
         ClipThumbnailView(
             clip: clip,
+            isSelected: selectedClipID == clip.id,
+            showTagPickerBinding: Binding(
+                get: { store.showTagPickerForClipID == clip.id },
+                set: { if !$0 { store.showTagPickerForClipID = nil } }
+            ),
             thumbnailGenerator: store.thumbnailGenerator,
             availableTags: store.availableTags,
             audioEnabled: audioEnabled,
@@ -181,9 +266,14 @@ struct ClipGridView: View {
             onAddTag: { tag in
                 store.addTag(tag)
             },
-            onDoubleClick: {
+            onSelect: {
+                selectedClipID = clip.id
+            },
+            onOpen: {
+                selectedClipID = clip.id
                 expandedClip = clip
             }
         )
+        .id(clip.id)
     }
 }

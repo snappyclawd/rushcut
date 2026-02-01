@@ -35,6 +35,7 @@ class ClipStore: ObservableObject {
     @Published var gridColumns: Int = 3
     @Published var groupMode: GroupMode = .none
     @Published var availableTags: [String] = defaultTags
+    @Published var showTagPickerForClipID: UUID? = nil
     
     let thumbnailGenerator = ThumbnailGenerator()
     

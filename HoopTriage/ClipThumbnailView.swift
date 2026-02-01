@@ -4,13 +4,16 @@ import AVFoundation
 /// A single clip card with hover-scrub, poster, rating, and tags
 struct ClipThumbnailView: View {
     let clip: Clip
+    let isSelected: Bool
+    @Binding var showTagPickerBinding: Bool
     let thumbnailGenerator: ThumbnailGenerator
     let availableTags: [String]
     let audioEnabled: Bool
     let onRate: (Int) -> Void
     let onTag: (String?) -> Void
     let onAddTag: (String) -> Void
-    let onDoubleClick: () -> Void
+    let onSelect: () -> Void
+    let onOpen: () -> Void
     
     @State private var posterImage: NSImage? = nil
     @State private var scrubImage: NSImage? = nil
@@ -133,8 +136,9 @@ struct ClipThumbnailView: View {
                         stopAudio()
                     }
                 }
-                .onTapGesture(count: 2) {
-                    onDoubleClick()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onOpen()
                 }
             }
             .aspectRatio(16/9, contentMode: .fit)
@@ -167,7 +171,17 @@ struct ClipThumbnailView: View {
         }
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(8)
-        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2.5)
+        )
+        .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : .black.opacity(0.2), radius: isSelected ? 4 : 2, y: 1)
+        .onChange(of: showTagPickerBinding) { _, show in
+            if show { showTagPicker = true }
+        }
+        .onChange(of: showTagPicker) { _, show in
+            if !show { showTagPickerBinding = false }
+        }
         .task {
             posterImage = await thumbnailGenerator.poster(
                 for: clip.url,
