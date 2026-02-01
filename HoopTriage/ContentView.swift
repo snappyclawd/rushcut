@@ -118,6 +118,29 @@ struct ContentView: View {
                 }
             }
             
+            // Audio Triage button
+            if !store.clips.isEmpty {
+                if store.isAnalyzing {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Button(action: { store.runAudioTriage() }) {
+                        Label("Audio Triage", systemImage: "waveform")
+                    }
+                    .help("Analyze audio to suggest ratings for unrated clips")
+                    .disabled(store.clips.filter({ $0.rating == 0 && $0.suggestedRating == 0 }).isEmpty)
+                }
+                
+                // Accept All (when suggestions exist)
+                if store.suggestedCount > 0 {
+                    Button(action: { store.acceptAllSuggestions() }) {
+                        Label("Accept All (\(store.suggestedCount))", systemImage: "checkmark.circle")
+                    }
+                    .help("Accept all audio suggestions as confirmed ratings")
+                }
+            }
+            
             // Export button
             if !store.clips.isEmpty {
                 Button(action: { showExport = true }) {

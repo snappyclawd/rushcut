@@ -104,6 +104,24 @@ struct ClipGridView: View {
             }
             return .ignored
         }
+        // A accepts suggestion on hovered clip
+        .onKeyPress(characters: .init(charactersIn: "a")) { _ in
+            guard expandedClip == nil else { return .ignored }
+            if let id = store.hoveredClipID {
+                store.acceptSuggestion(for: id)
+                return .handled
+            }
+            return .ignored
+        }
+        // X dismisses suggestion on hovered clip
+        .onKeyPress(characters: .init(charactersIn: "x")) { _ in
+            guard expandedClip == nil else { return .ignored }
+            if let id = store.hoveredClipID {
+                store.dismissSuggestion(for: id)
+                return .handled
+            }
+            return .ignored
+        }
         // Delete removes hovered clip
         .onKeyPress(.delete) {
             guard expandedClip == nil else { return .ignored }
@@ -217,7 +235,7 @@ struct ClipGridView: View {
         case .rating:
             var groups: [Int: [Clip]] = [:]
             for clip in clips {
-                groups[clip.rating, default: []].append(clip)
+                groups[clip.effectiveRating, default: []].append(clip)
             }
             return (0...5).reversed().compactMap { rating in
                 guard let clipsInGroup = groups[rating], !clipsInGroup.isEmpty else { return nil }
@@ -276,6 +294,12 @@ struct ClipGridView: View {
             },
             onRemove: {
                 store.removeClip(id: clip.id)
+            },
+            onAcceptSuggestion: {
+                store.acceptSuggestion(for: clip.id)
+            },
+            onDismissSuggestion: {
+                store.dismissSuggestion(for: clip.id)
             },
             onOpen: {
                 expandedClip = clip

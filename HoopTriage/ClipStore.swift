@@ -27,9 +27,13 @@ let defaultTags = [
 /// A single undoable action
 enum UndoAction: CustomStringConvertible {
     case setRating(clipID: UUID, oldRating: Int, newRating: Int)
-    case toggleTag(clipID: UUID, tag: String, wasAdded: Bool)  // wasAdded: true = tag was added, false = tag was removed
+    case toggleTag(clipID: UUID, tag: String, wasAdded: Bool)
     case removeClip(clip: Clip, index: Int)
     case addClips(clipIDs: [UUID])
+    case audioTriage(suggestions: [(UUID, Int)])              // bulk suggested ratings
+    case acceptSuggestion(clipID: UUID, suggestedRating: Int) // single accept
+    case acceptAllSuggestions(accepted: [(UUID, Int)])         // bulk accept
+    case dismissSuggestion(clipID: UUID, suggestedRating: Int)
     
     var description: String {
         switch self {
@@ -41,6 +45,14 @@ enum UndoAction: CustomStringConvertible {
             return "Remove '\(clip.filename)'"
         case .addClips(let ids):
             return "Add \(ids.count) clip\(ids.count == 1 ? "" : "s")"
+        case .audioTriage(let suggestions):
+            return "Audio Triage (\(suggestions.count) clips)"
+        case .acceptSuggestion:
+            return "Accept Suggestion"
+        case .acceptAllSuggestions(let accepted):
+            return "Accept All (\(accepted.count) clips)"
+        case .dismissSuggestion:
+            return "Dismiss Suggestion"
         }
     }
 }
@@ -80,7 +92,7 @@ class ClipStore: ObservableObject {
         var result = clips
         
         if filterRating > 0 {
-            result = result.filter { $0.rating == filterRating }
+            result = result.filter { $0.effectiveRating == filterRating }
         }
         
         if let tag = filterTag {
@@ -93,7 +105,7 @@ class ClipStore: ObservableObject {
         case .duration:
             result.sort { $0.duration > $1.duration }
         case .rating:
-            result.sort { $0.rating > $1.rating }
+            result.sort { $0.effectiveRating > $1.effectiveRating }
         }
         
         return result
@@ -218,6 +230,82 @@ class ClipStore: ObservableObject {
         }
     }
     
+    // MARK: - Audio Triage (Suggestions)
+    
+    @Published var isAnalyzing = false
+    @Published var analysisProgress: Double = 0
+    
+    /// Number of clips with unconfirmed suggestions
+    var suggestedCount: Int {
+        clips.filter { $0.hasSuggestion }.count
+    }
+    
+    /// Run audio analysis on unrated clips and assign suggested ratings
+    func runAudioTriage() {
+        let unratedClips = clips.filter { $0.rating == 0 && $0.suggestedRating == 0 }
+        guard !unratedClips.isEmpty else { return }
+        
+        isAnalyzing = true
+        analysisProgress = 0
+        
+        Task {
+            let results = await AudioAnalyzer.analyzeAndRate(clips: unratedClips)
+            
+            // Apply suggestions
+            var applied: [(UUID, Int)] = []
+            for (id, rating) in results {
+                if let index = clips.firstIndex(where: { $0.id == id }) {
+                    clips[index].suggestedRating = rating
+                    applied.append((id, rating))
+                }
+            }
+            
+            isAnalyzing = false
+            analysisProgress = 1.0
+            
+            if !applied.isEmpty {
+                pushUndo(.audioTriage(suggestions: applied))
+            }
+        }
+    }
+    
+    /// Accept a single suggestion — promotes to confirmed rating
+    func acceptSuggestion(for clipID: UUID) {
+        guard let index = clips.firstIndex(where: { $0.id == clipID }),
+              clips[index].hasSuggestion else { return }
+        
+        let suggested = clips[index].suggestedRating
+        clips[index].rating = suggested
+        clips[index].suggestedRating = 0
+        pushUndo(.acceptSuggestion(clipID: clipID, suggestedRating: suggested))
+    }
+    
+    /// Accept all pending suggestions
+    func acceptAllSuggestions() {
+        var accepted: [(UUID, Int)] = []
+        for index in clips.indices {
+            if clips[index].hasSuggestion {
+                let suggested = clips[index].suggestedRating
+                accepted.append((clips[index].id, suggested))
+                clips[index].rating = suggested
+                clips[index].suggestedRating = 0
+            }
+        }
+        if !accepted.isEmpty {
+            pushUndo(.acceptAllSuggestions(accepted: accepted))
+        }
+    }
+    
+    /// Dismiss a single suggestion
+    func dismissSuggestion(for clipID: UUID) {
+        guard let index = clips.firstIndex(where: { $0.id == clipID }),
+              clips[index].suggestedRating > 0 else { return }
+        
+        let suggested = clips[index].suggestedRating
+        clips[index].suggestedRating = 0
+        pushUndo(.dismissSuggestion(clipID: clipID, suggestedRating: suggested))
+    }
+    
     // MARK: - Undo / Redo
     
     private func pushUndo(_ action: UndoAction) {
@@ -260,6 +348,36 @@ class ClipStore: ObservableObject {
             for clip in removed {
                 loadedURLs.remove(clip.url)
             }
+            
+        case .audioTriage(let suggestions):
+            // Undo = clear all suggestions
+            for (id, _) in suggestions {
+                if let index = clips.firstIndex(where: { $0.id == id }) {
+                    clips[index].suggestedRating = 0
+                }
+            }
+            
+        case .acceptSuggestion(let clipID, let suggestedRating):
+            // Undo = move rating back to suggestion
+            if let index = clips.firstIndex(where: { $0.id == clipID }) {
+                clips[index].rating = 0
+                clips[index].suggestedRating = suggestedRating
+            }
+            
+        case .acceptAllSuggestions(let accepted):
+            // Undo = move all ratings back to suggestions
+            for (id, suggestedRating) in accepted {
+                if let index = clips.firstIndex(where: { $0.id == id }) {
+                    clips[index].rating = 0
+                    clips[index].suggestedRating = suggestedRating
+                }
+            }
+            
+        case .dismissSuggestion(let clipID, let suggestedRating):
+            // Undo = restore suggestion
+            if let index = clips.firstIndex(where: { $0.id == clipID }) {
+                clips[index].suggestedRating = suggestedRating
+            }
         }
         
         redoStack.append(action)
@@ -289,6 +407,32 @@ class ClipStore: ObservableObject {
             
         case .addClips:
             break
+            
+        case .audioTriage(let suggestions):
+            for (id, rating) in suggestions {
+                if let index = clips.firstIndex(where: { $0.id == id }) {
+                    clips[index].suggestedRating = rating
+                }
+            }
+            
+        case .acceptSuggestion(let clipID, let suggestedRating):
+            if let index = clips.firstIndex(where: { $0.id == clipID }) {
+                clips[index].rating = suggestedRating
+                clips[index].suggestedRating = 0
+            }
+            
+        case .acceptAllSuggestions(let accepted):
+            for (id, rating) in accepted {
+                if let index = clips.firstIndex(where: { $0.id == id }) {
+                    clips[index].rating = rating
+                    clips[index].suggestedRating = 0
+                }
+            }
+            
+        case .dismissSuggestion(let clipID, _):
+            if let index = clips.firstIndex(where: { $0.id == clipID }) {
+                clips[index].suggestedRating = 0
+            }
         }
         
         undoStack.append(action)
@@ -323,6 +467,7 @@ class ClipStore: ObservableObject {
     
     var totalClips: Int { clips.count }
     var ratedClips: Int { clips.filter { $0.rating > 0 }.count }
+    var suggestedClipsCount: Int { clips.filter { $0.hasSuggestion }.count }
     var taggedClips: Int { clips.filter { !$0.tags.isEmpty }.count }
     var totalDuration: Double { clips.reduce(0) { $0 + $1.duration } }
     
@@ -365,7 +510,7 @@ class ClipStore: ObservableObject {
         let skippedCount: Int
         
         if skipUntouched {
-            clipsToExport = clips.filter { $0.rating > 0 || !$0.tags.isEmpty }
+            clipsToExport = clips.filter { $0.effectiveRating > 0 || !$0.tags.isEmpty }
             skippedCount = clips.count - clipsToExport.count
         } else {
             clipsToExport = clips
@@ -396,7 +541,7 @@ class ClipStore: ObservableObject {
         var exportedClipData: [[String: Any]] = []
         
         for clip in clipsToExport {
-            let folderName = ratingFolderNames[clip.rating] ?? "Unrated"
+            let folderName = ratingFolderNames[clip.effectiveRating] ?? "Unrated"
             let destFolder = finalFolder.appendingPathComponent(folderName)
             var destFile = destFolder.appendingPathComponent(clip.filename)
             
@@ -418,7 +563,7 @@ class ClipStore: ObservableObject {
                 // Build metadata entry
                 var entry: [String: Any] = [
                     "filename": destFile.lastPathComponent,
-                    "rating": clip.rating,
+                    "rating": clip.effectiveRating,
                     "tags": Array(clip.tags).sorted(),
                     "duration": round(clip.duration * 10) / 10,
                     "originalPath": clip.url.path,
@@ -447,7 +592,7 @@ class ClipStore: ObservableObject {
         // Generate rating summary
         var ratingSummary: [String: Int] = [:]
         for clip in clipsToExport {
-            let key = ratingFolderNames[clip.rating] ?? "Unrated"
+            let key = ratingFolderNames[clip.effectiveRating] ?? "Unrated"
             ratingSummary[key, default: 0] += 1
         }
         

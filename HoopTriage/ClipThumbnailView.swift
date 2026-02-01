@@ -15,6 +15,8 @@ struct ClipThumbnailView: View {
     let onAddTag: (String) -> Void
     let onHoverChange: (Bool) -> Void
     let onRemove: () -> Void
+    let onAcceptSuggestion: () -> Void
+    let onDismissSuggestion: () -> Void
     let onOpen: () -> Void
     
     @State private var posterImage: NSImage? = nil
@@ -54,8 +56,8 @@ struct ClipThumbnailView: View {
                             .clipped()
                     }
                     
-                    // Rating badge (top-left)
-                    if clip.rating > 0 {
+                    // Rating badge (top-left) — solid for confirmed, outline for suggested
+                    if clip.effectiveRating > 0 {
                         VStack {
                             HStack {
                                 ratingBadge.padding(6)
@@ -65,7 +67,7 @@ struct ClipThumbnailView: View {
                         }
                     }
                     
-                    // Delete button (top-right, on card hover)
+                    // Action buttons (top-right, on card hover)
                     if isCardHovered {
                         VStack {
                             HStack {
@@ -81,6 +83,48 @@ struct ClipThumbnailView: View {
                                 .padding(6)
                             }
                             Spacer()
+                        }
+                    }
+                    
+                    // Accept/Dismiss suggestion buttons (bottom, on hover)
+                    if clip.hasSuggestion && isCardHovered {
+                        VStack {
+                            Spacer()
+                            HStack(spacing: 8) {
+                                Button(action: onAcceptSuggestion) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 11, weight: .bold))
+                                        Text("Accept")
+                                            .font(.system(size: 11, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.green.opacity(0.85))
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Accept suggestion (A)")
+                                
+                                Button(action: onDismissSuggestion) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 11, weight: .bold))
+                                        Text("Dismiss")
+                                            .font(.system(size: 11, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.red.opacity(0.7))
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Dismiss suggestion (X)")
+                            }
+                            .shadow(color: .black.opacity(0.4), radius: 3)
+                            .padding(.bottom, 10)
                         }
                     }
                     
@@ -229,17 +273,28 @@ struct ClipThumbnailView: View {
     // MARK: - Rating Badge
     
     private var ratingBadge: some View {
-        let color = Self.scoreColors[clip.rating] ?? .gray
+        let effectiveRating = clip.effectiveRating
+        let color = Self.scoreColors[effectiveRating] ?? .gray
+        let isSuggested = clip.hasSuggestion
+        
         return HStack(spacing: 3) {
-            Text("\(clip.rating)")
+            if isSuggested {
+                Image(systemName: "waveform")
+                    .font(.system(size: 10))
+            }
+            Text("\(effectiveRating)")
                 .font(.system(size: 20, weight: .bold, design: .rounded))
             Text("★")
                 .font(.system(size: 15))
         }
-        .foregroundColor(.white)
+        .foregroundColor(isSuggested ? color : .white)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(color)
+        .background(isSuggested ? color.opacity(0.2) : color)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(isSuggested ? color : Color.clear, lineWidth: 1.5, antialiased: true)
+        )
         .cornerRadius(10)
         .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
     }
@@ -299,7 +354,15 @@ struct ClipThumbnailView: View {
         if hoveredStar > 0 {
             return star <= hoveredStar ? .orange : Color.gray.opacity(0.25)
         }
-        return star <= clip.rating ? .yellow : Color.gray.opacity(0.25)
+        // Confirmed rating = solid yellow
+        if clip.rating > 0 {
+            return star <= clip.rating ? .yellow : Color.gray.opacity(0.25)
+        }
+        // Suggested rating = blue ghost
+        if clip.suggestedRating > 0 {
+            return star <= clip.suggestedRating ? Color.blue.opacity(0.5) : Color.gray.opacity(0.25)
+        }
+        return Color.gray.opacity(0.25)
     }
     
     // MARK: - Tag Display & Picker
