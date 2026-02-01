@@ -35,6 +35,15 @@ struct ContentView: View {
         .onDrop(of: [.fileURL], isTargeted: $isDragTargeted) { providers in
             handleDrop(providers)
         }
+        // Undo: Cmd+Z, Redo: Cmd+Shift+Z
+        .onKeyPress(characters: .init("z"), modifiers: [.command]) { _ in
+            store.undo()
+            return .handled
+        }
+        .onKeyPress(characters: .init("z"), modifiers: [.command, .shift]) { _ in
+            store.redo()
+            return .handled
+        }
     }
     
     // MARK: - Toolbar
@@ -112,8 +121,31 @@ struct ContentView: View {
                 }
             }
             
+            // Undo / Redo buttons
+            if !store.undoStack.isEmpty || !store.redoStack.isEmpty {
+                HStack(spacing: 4) {
+                    Button(action: { store.undo() }) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.undoStack.isEmpty)
+                    .help(store.undoDescription ?? "Nothing to undo")
+                    .foregroundColor(store.undoStack.isEmpty ? .secondary.opacity(0.3) : .secondary)
+                    
+                    Button(action: { store.redo() }) {
+                        Image(systemName: "arrow.uturn.forward")
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.redoStack.isEmpty)
+                    .help(store.redoDescription ?? "Nothing to redo")
+                    .foregroundColor(store.redoStack.isEmpty ? .secondary.opacity(0.3) : .secondary)
+                }
+            }
+            
             Button(action: { store.pickFolder() }) {
-                Label("Open Folder", systemImage: "folder")
+                Label("Add Footage", systemImage: "plus.rectangle.on.folder")
             }
         }
         .padding(.horizontal, 16)
@@ -182,7 +214,7 @@ struct ContentView: View {
                 .font(.system(size: 48))
                 .foregroundColor(isDragTargeted ? .accentColor : .secondary)
             
-            Text("Drop a folder of clips here")
+            Text("Drop folders or clips here")
                 .font(.title2)
                 .foregroundColor(isDragTargeted ? .accentColor : .primary)
             
@@ -190,7 +222,7 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
             
             Button(action: { store.pickFolder() }) {
-                Label("Choose Folder", systemImage: "folder")
+                Label("Add Footage", systemImage: "plus.rectangle.on.folder")
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
             }
@@ -226,11 +258,10 @@ struct ContentView: View {
                 
                 DispatchQueue.main.async {
                     if isDir.boolValue {
-                        // Dropped a folder — load it (handles nested folders + ignores non-video files)
-                        store.loadFolder(url)
+                        // Dropped a folder — add clips (additive, skips duplicates)
+                        store.addFolder(url)
                     } else {
-                        // Dropped individual file(s) — load the parent folder
-                        // or add individual clips
+                        // Dropped individual file(s) — add to collection
                         let ext = url.pathExtension.lowercased()
                         if supportedExtensions.contains(ext) {
                             store.addClip(url: url)

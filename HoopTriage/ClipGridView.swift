@@ -108,8 +108,23 @@ struct ClipGridView: View {
         .onKeyPress(characters: .init("t")) { press in
             guard expandedClip == nil else { return .ignored }
             if let id = selectedClipID {
-                // Toggle tag picker for selected clip — we signal via store
                 store.showTagPickerForClipID = id
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(.delete) {
+            guard expandedClip == nil else { return .ignored }
+            if let id = selectedClipID {
+                removeSelectedClip(id: id)
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(.deleteForward) {
+            guard expandedClip == nil else { return .ignored }
+            if let id = selectedClipID {
+                removeSelectedClip(id: id)
                 return .handled
             }
             return .ignored
@@ -123,6 +138,21 @@ struct ClipGridView: View {
     }
     
     // MARK: - Keyboard Navigation
+    
+    /// Remove clip and move selection to the next one
+    private func removeSelectedClip(id: UUID) {
+        let clips = displayedClips
+        if let currentIndex = clips.firstIndex(where: { $0.id == id }) {
+            // Move selection to next clip (or previous if at end)
+            if clips.count > 1 {
+                let nextIndex = currentIndex < clips.count - 1 ? currentIndex + 1 : currentIndex - 1
+                selectedClipID = clips[nextIndex].id
+            } else {
+                selectedClipID = nil
+            }
+        }
+        store.removeClip(id: id)
+    }
     
     private func navigateClip(by offset: Int) {
         let clips = displayedClips
