@@ -150,7 +150,7 @@ class ClipStore: ObservableObject {
             var addedIDs: [UUID] = []
             
             for (index, fileURL) in newURLs.enumerated() {
-                let clip = Clip(url: fileURL)
+                let clip = await Clip.create(url: fileURL)
                 
                 await MainActor.run {
                     self.clips.append(clip)
@@ -176,10 +176,12 @@ class ClipStore: ObservableObject {
         guard supportedExtensions.contains(ext) else { return }
         guard !loadedURLs.contains(url) else { return }
         
-        let clip = Clip(url: url)
-        clips.append(clip)
-        loadedURLs.insert(url)
-        pushUndo(.addClips(clipIDs: [clip.id]))
+        loadedURLs.insert(url) // Mark immediately to prevent double-adds
+        Task {
+            let clip = await Clip.create(url: url)
+            clips.append(clip)
+            pushUndo(.addClips(clipIDs: [clip.id]))
+        }
     }
     
     // MARK: - Remove Clip (soft delete — file stays on disk)

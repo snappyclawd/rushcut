@@ -36,11 +36,11 @@ struct ContentView: View {
             handleDrop(providers)
         }
         // Undo: Cmd+Z, Redo: Cmd+Shift+Z
-        .onKeyPress(characters: .init("z"), modifiers: [.command]) { _ in
+        .onKeyPress(characters: .init(charactersIn: "z"), modifiers: [.command]) { _ in
             store.undo()
             return .handled
         }
-        .onKeyPress(characters: .init("z"), modifiers: [.command, .shift]) { _ in
+        .onKeyPress(characters: .init(charactersIn: "z"), modifiers: [.command, .shift]) { _ in
             store.redo()
             return .handled
         }

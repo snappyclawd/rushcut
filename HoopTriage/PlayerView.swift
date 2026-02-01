@@ -118,21 +118,21 @@ struct PlayerView: View {
         .shadow(radius: 20)
         .focused($isFocused)
         .onKeyPress(.space) { togglePlayPause(); return .handled }
-        .onKeyPress(characters: .init("l")) { _ in handleL(); return .handled }
-        .onKeyPress(characters: .init("j")) { _ in handleJ(); return .handled }
-        .onKeyPress(characters: .init("k")) { _ in handleK(); return .handled }
-        .onKeyPress(characters: .init(",")) { _ in stepFrame(forward: false); return .handled }
-        .onKeyPress(characters: .init(".")) { _ in stepFrame(forward: true); return .handled }
-        .onKeyPress(characters: .init("[")) { _ in jumpTime(by: -5); return .handled }
-        .onKeyPress(characters: .init("]")) { _ in jumpTime(by: 5); return .handled }
-        .onKeyPress(characters: .init("12345")) { press in
+        .onKeyPress(characters: .init(charactersIn: "l")) { _ in handleL(); return .handled }
+        .onKeyPress(characters: .init(charactersIn: "j")) { _ in handleJ(); return .handled }
+        .onKeyPress(characters: .init(charactersIn: "k")) { _ in handleK(); return .handled }
+        .onKeyPress(characters: .init(charactersIn: ",")) { _ in stepFrame(forward: false); return .handled }
+        .onKeyPress(characters: .init(charactersIn: ".")) { _ in stepFrame(forward: true); return .handled }
+        .onKeyPress(characters: .init(charactersIn: "[")) { _ in jumpTime(by: -5); return .handled }
+        .onKeyPress(characters: .init(charactersIn: "]")) { _ in jumpTime(by: 5); return .handled }
+        .onKeyPress(characters: .init(charactersIn: "12345")) { press in
             if let digit = Int(String(press.characters)), (1...5).contains(digit) {
                 onRate(digit)
                 return .handled
             }
             return .ignored
         }
-        .onKeyPress(characters: .init("t")) { _ in
+        .onKeyPress(characters: .init(charactersIn: "t")) { _ in
             showTagPicker.toggle()
             return .handled
         }

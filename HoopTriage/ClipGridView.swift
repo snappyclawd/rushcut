@@ -96,7 +96,7 @@ struct ClipGridView: View {
             }
             return .ignored
         }
-        .onKeyPress(characters: .init("12345")) { press in
+        .onKeyPress(characters: .init(charactersIn: "12345")) { press in
             guard expandedClip == nil else { return .ignored }
             if let digit = Int(String(press.characters)), (1...5).contains(digit),
                let id = selectedClipID {
@@ -105,7 +105,7 @@ struct ClipGridView: View {
             }
             return .ignored
         }
-        .onKeyPress(characters: .init("t")) { press in
+        .onKeyPress(characters: .init(charactersIn: "t")) { press in
             guard expandedClip == nil else { return .ignored }
             if let id = selectedClipID {
                 store.showTagPickerForClipID = id
