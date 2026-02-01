@@ -279,6 +279,11 @@ struct AudioTriageView: View {
                 store.pushUndoAction(.audioTriage(suggestions: applied))
             }
             
+            // Auto-switch to rating grouping if no grouping is active
+            if store.groupMode == .none {
+                store.groupMode = .rating
+            }
+            
             phase = .complete
         }
     }
