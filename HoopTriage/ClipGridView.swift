@@ -44,6 +44,16 @@ struct ClipGridView: View {
                 .focusable()
                 .focused($isGridFocused)
                 .focusEffectDisabled()
+                .onChange(of: store.groupMode) { _, _ in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        scrollProxy.scrollTo("scrollTop", anchor: .top)
+                    }
+                }
+                .onChange(of: store.filterRating) { _, _ in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        scrollProxy.scrollTo("scrollTop", anchor: .top)
+                    }
+                }
                 .overlay(alignment: .bottomTrailing) {
                     BackToTopButton {
                         withAnimation(.easeInOut(duration: 0.3)) {
