@@ -193,6 +193,7 @@ struct ContentView: View {
             Text(label)
                 .foregroundColor(.secondary)
         }
+        .fixedSize()
     }
     
     // MARK: - Drop Zone

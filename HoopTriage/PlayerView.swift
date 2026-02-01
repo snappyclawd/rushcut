@@ -16,105 +16,41 @@ struct PlayerView: View {
     @State private var player: AVPlayer?
     @State private var isPlaying = false
     @State private var playbackDirection: Int = 0  // -1 = reverse, 0 = paused, 1 = forward
-    @State private var speedIndex: Int = 0  // index into speedLevels
+    @State private var speedIndex: Int = 0
     @State private var currentTime: Double = 0
+    @State private var isScrubbing = false
     @State private var showTagPicker = false
     @State private var newTagText = ""
     @State private var hoveredStar: Int = 0
     @FocusState private var isFocused: Bool
     
-    // Timer for reverse playback and time tracking
     @State private var reverseTimer: Timer? = nil
     @State private var timeObserver: Any? = nil
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(clip.filename)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 11))
-                        Text(clip.url.deletingLastPathComponent().path)
-                            .font(.system(size: 11))
-                            .lineLimit(1)
-                            .truncationMode(.head)
-                    }
-                    .foregroundColor(.secondary)
-                    
-                    // Metadata row
-                    HStack(spacing: 16) {
-                        metaItem(icon: "clock", value: clip.durationFormatted)
-                        
-                        if clip.width > 0 && clip.height > 0 {
-                            metaItem(icon: "rectangle", value: "\(clip.width)×\(clip.height)")
-                        }
-                        
-                        if clip.fileSizeFormatted != nil {
-                            metaItem(icon: "doc", value: clip.fileSizeFormatted!)
-                        }
-                    }
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                    .padding(.top, 4)
-                    
-                    // Rating + tag row
-                    HStack(spacing: 16) {
-                        playerStarRating
-                        playerTagButton
-                    }
-                    .padding(.top, 4)
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 8) {
-                    HStack(spacing: 12) {
-                        // Reveal in Finder
-                        Button(action: {
-                            NSWorkspace.shared.selectFile(clip.url.path, inFileViewerRootedAtPath: clip.url.deletingLastPathComponent().path)
-                        }) {
-                            Image(systemName: "arrow.right.circle")
-                                .font(.title3)
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Reveal in Finder")
-                        
-                        Button(action: onClose) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    
-                    // Playback status indicator
-                    playbackIndicator
-                }
-            }
-            .padding(20)
+            // Header bar — compact
+            headerBar
+            
+            Divider()
             
             // Video player
             if let player = player {
                 VideoPlayer(player: player)
-                    .frame(minHeight: 400, maxHeight: 600)
-                    .cornerRadius(8)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .cornerRadius(0)
             }
             
-            // Keyboard shortcut hints
-            keyboardHints
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+            // Custom scrub bar
+            scrubBar
+            
+            Divider()
+            
+            // Bottom bar: rating + tag + transport info
+            bottomBar
         }
         .background(.regularMaterial)
-        .cornerRadius(16)
+        .cornerRadius(12)
         .shadow(radius: 20)
         .focused($isFocused)
         .onKeyPress(.space) { togglePlayPause(); return .handled }
@@ -147,18 +83,20 @@ struct PlayerView: View {
         .onAppear {
             let p = AVPlayer(url: clip.url)
             player = p
-            p.play()
-            isPlaying = true
-            playbackDirection = 1
+            // Start paused
+            p.pause()
+            isPlaying = false
+            playbackDirection = 0
             speedIndex = 0
             isFocused = true
             
-            // Periodic time observer
             timeObserver = p.addPeriodicTimeObserver(
-                forInterval: CMTime(seconds: 0.1, preferredTimescale: 600),
+                forInterval: CMTime(seconds: 0.05, preferredTimescale: 600),
                 queue: .main
             ) { time in
-                currentTime = CMTimeGetSeconds(time)
+                if !isScrubbing {
+                    currentTime = CMTimeGetSeconds(time)
+                }
             }
         }
         .onDisappear {
@@ -172,18 +110,182 @@ struct PlayerView: View {
         }
     }
     
+    // MARK: - Header Bar
+    
+    private var headerBar: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(clip.filename)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                
+                HStack(spacing: 12) {
+                    metaItem(icon: "clock", value: clip.durationFormatted)
+                    if clip.width > 0 && clip.height > 0 {
+                        metaItem(icon: "rectangle", value: "\(clip.width)×\(clip.height)")
+                    }
+                    if let size = clip.fileSizeFormatted {
+                        metaItem(icon: "doc", value: size)
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Reveal in Finder
+            Button(action: {
+                NSWorkspace.shared.selectFile(clip.url.path, inFileViewerRootedAtPath: clip.url.deletingLastPathComponent().path)
+            }) {
+                Image(systemName: "folder")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Reveal in Finder")
+            
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Close (Esc)")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+    
+    // MARK: - Scrub Bar
+    
+    private var scrubBar: some View {
+        VStack(spacing: 0) {
+            // Clickable/draggable timeline
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    // Track background
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                    
+                    // Progress fill
+                    Rectangle()
+                        .fill(Color.accentColor)
+                        .frame(width: clip.duration > 0 ? geo.size.width * CGFloat(currentTime / clip.duration) : 0)
+                }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isScrubbing = true
+                            let progress = max(0, min(1, value.location.x / geo.size.width))
+                            let time = Double(progress) * clip.duration
+                            currentTime = time
+                            player?.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+                        }
+                        .onEnded { _ in
+                            isScrubbing = false
+                        }
+                )
+            }
+            .frame(height: 6)
+            .cornerRadius(3)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+            
+            // Time labels + transport status
+            HStack {
+                Text(formatTime(currentTime))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                // Transport status
+                if playbackDirection != 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: playbackDirection == -1 ? "backward.fill" : "forward.fill")
+                            .font(.system(size: 9))
+                        Text("\(Int(speedLevels[speedIndex]))×")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    }
+                    .foregroundColor(.accentColor)
+                } else {
+                    Text("Paused")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary.opacity(0.6))
+                }
+                
+                Spacer()
+                
+                Text(formatTime(clip.duration))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+            .padding(.bottom, 2)
+        }
+    }
+    
+    // MARK: - Bottom Bar
+    
+    private var bottomBar: some View {
+        HStack(spacing: 16) {
+            // Play/Pause button
+            Button(action: { togglePlayPause() }) {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 14))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("Space")
+            
+            // Step back / forward
+            Button(action: { stepFrame(forward: false) }) {
+                Image(systemName: "backward.frame.fill")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .help(", key")
+            
+            Button(action: { stepFrame(forward: true) }) {
+                Image(systemName: "forward.frame.fill")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .help(". key")
+            
+            Divider().frame(height: 18)
+            
+            // Star rating
+            playerStarRating
+            
+            Divider().frame(height: 18)
+            
+            // Tag
+            playerTagButton
+            
+            Spacer()
+            
+            // Keyboard hint (subtle)
+            Text("J K L  scrub  ·  , .  frame  ·  [ ]  ±5s")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary.opacity(0.4))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+    
     // MARK: - JKL Scrubbing
     
-    /// L key: play forward, accelerate with each press
     private func handleL() {
         stopReversePlayback()
         guard let player = player else { return }
         
         if playbackDirection == 1 {
-            // Already going forward — speed up
             speedIndex = min(speedIndex + 1, speedLevels.count - 1)
         } else {
-            // Was paused or reverse — start forward at 1x
             playbackDirection = 1
             speedIndex = 0
         }
@@ -192,27 +294,21 @@ struct PlayerView: View {
         isPlaying = true
     }
     
-    /// J key: play reverse, accelerate with each press
     private func handleJ() {
         guard let player = player else { return }
         
         if playbackDirection == -1 {
-            // Already going reverse — speed up
             speedIndex = min(speedIndex + 1, speedLevels.count - 1)
         } else {
-            // Was paused or forward — start reverse at 1x
             player.pause()
             playbackDirection = -1
             speedIndex = 0
         }
         
-        // AVPlayer doesn't natively support reverse at arbitrary speeds,
-        // so we use a timer-based approach for reverse scrub
         startReversePlayback(speed: speedLevels[speedIndex])
         isPlaying = true
     }
     
-    /// K key: pause. If held with J or L, frame step (handled by , and . keys)
     private func handleK() {
         stopReversePlayback()
         player?.pause()
@@ -221,7 +317,6 @@ struct PlayerView: View {
         isPlaying = false
     }
     
-    /// Frame step forward or backward
     private func stepFrame(forward: Bool) {
         stopReversePlayback()
         guard let player = player else { return }
@@ -229,7 +324,6 @@ struct PlayerView: View {
         playbackDirection = 0
         isPlaying = false
         
-        // Step by ~1 frame (assuming ~30fps → ~0.033s)
         let frameTime = CMTime(seconds: 1.0 / 30.0, preferredTimescale: 600)
         if forward {
             player.seek(to: CMTimeAdd(player.currentTime(), frameTime), toleranceBefore: .zero, toleranceAfter: .zero)
@@ -238,7 +332,6 @@ struct PlayerView: View {
         }
     }
     
-    /// Jump forward/backward by seconds
     private func jumpTime(by seconds: Double) {
         guard let player = player else { return }
         let target = CMTimeGetSeconds(player.currentTime()) + seconds
@@ -246,7 +339,6 @@ struct PlayerView: View {
         player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
     }
     
-    /// Toggle play/pause with Space
     private func togglePlayPause() {
         guard let player = player else { return }
         if isPlaying {
@@ -260,14 +352,13 @@ struct PlayerView: View {
         }
     }
     
-    // MARK: - Reverse Playback (timer-based)
+    // MARK: - Reverse Playback
     
     private func startReversePlayback(speed: Float) {
         reverseTimer?.invalidate()
         guard let player = player else { return }
         
-        // Seek backward at intervals to simulate reverse playback
-        let interval = 1.0 / 30.0  // ~30fps
+        let interval = 1.0 / 30.0
         let seekStep = Double(speed) * interval
         
         reverseTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
@@ -287,88 +378,15 @@ struct PlayerView: View {
         reverseTimer = nil
     }
     
-    // MARK: - Playback Indicator
-    
-    private var playbackIndicator: some View {
-        Group {
-            if playbackDirection != 0 {
-                HStack(spacing: 4) {
-                    if playbackDirection == -1 {
-                        Image(systemName: "backward.fill")
-                            .font(.system(size: 10))
-                    } else {
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 10))
-                    }
-                    Text("\(Int(speedLevels[speedIndex]))×")
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                }
-                .foregroundColor(.accentColor)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Color.accentColor.opacity(0.12))
-                .cornerRadius(8)
-            } else {
-                HStack(spacing: 4) {
-                    Image(systemName: "pause.fill")
-                        .font(.system(size: 10))
-                    Text(formatTime(currentTime))
-                        .font(.system(size: 12, design: .monospaced))
-                }
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(8)
-            }
-        }
-    }
-    
-    // MARK: - Keyboard Hints
-    
-    private var keyboardHints: some View {
-        HStack(spacing: 16) {
-            keyHint("J", "Rev")
-            keyHint("K", "Pause")
-            keyHint("L", "Fwd")
-            Divider().frame(height: 14)
-            keyHint(",", "← Frame")
-            keyHint(".", "Frame →")
-            Divider().frame(height: 14)
-            keyHint("[", "-5s")
-            keyHint("]", "+5s")
-            Divider().frame(height: 14)
-            keyHint("Space", "Play/Pause")
-            keyHint("1-5", "Rate")
-            keyHint("T", "Tag")
-            keyHint("Esc", "Close")
-        }
-        .font(.system(size: 10))
-        .foregroundColor(.secondary.opacity(0.7))
-    }
-    
-    private func keyHint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 3) {
-            Text(key)
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
-                .background(Color.gray.opacity(0.15))
-                .cornerRadius(3)
-            Text(label)
-                .font(.system(size: 9))
-        }
-    }
-    
-    // MARK: - Star Rating (in player)
+    // MARK: - Star Rating
     
     private var playerStarRating: some View {
         HStack(spacing: 2) {
             ForEach(1...5, id: \.self) { star in
                 Text("★")
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundColor(playerStarColor(for: star))
-                    .scaleEffect(hoveredStar == star ? 1.2 : 1.0)
+                    .scaleEffect(hoveredStar == star ? 1.15 : 1.0)
                     .animation(.easeInOut(duration: 0.1), value: hoveredStar)
                     .onHover { isOver in
                         hoveredStar = isOver ? star : 0
@@ -377,12 +395,6 @@ struct PlayerView: View {
                         onRate(star)
                     }
             }
-            
-            // Show keyboard hint
-            Text("(1-5)")
-                .font(.system(size: 10))
-                .foregroundColor(.secondary.opacity(0.5))
-                .padding(.leading, 4)
         }
     }
     
@@ -393,7 +405,7 @@ struct PlayerView: View {
         return star <= clip.rating ? .yellow : Color.gray.opacity(0.25)
     }
     
-    // MARK: - Tag Button (in player)
+    // MARK: - Tag Button
     
     private var playerTagButton: some View {
         Group {
@@ -410,8 +422,8 @@ struct PlayerView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "tag")
                         .font(.system(size: 12))
-                    Text("Add tag (T)")
-                        .font(.system(size: 10))
+                    Text("Tag")
+                        .font(.system(size: 11))
                 }
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 10)
@@ -421,7 +433,7 @@ struct PlayerView: View {
                 .onTapGesture { showTagPicker.toggle() }
             }
         }
-        .popover(isPresented: $showTagPicker, arrowEdge: .bottom) {
+        .popover(isPresented: $showTagPicker, arrowEdge: .top) {
             playerTagPickerContent
         }
     }
