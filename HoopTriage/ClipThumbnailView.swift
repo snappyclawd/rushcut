@@ -157,9 +157,9 @@ struct ClipThumbnailView: View {
                 
                 HStack(spacing: 6) {
                     starRating
-                    Spacer()
-                    tagButton
                 }
+                
+                tagPills
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -252,118 +252,62 @@ struct ClipThumbnailView: View {
         return star <= clip.rating ? .yellow : Color.gray.opacity(0.25)
     }
     
-    // MARK: - Tag Picker
+    // MARK: - Tag Pills
     
-    private var tagButton: some View {
-        Group {
-            if let tag = clip.category {
-                Text(tag)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(tagColor(for: tag))
-                    .cornerRadius(10)
-                    .onTapGesture { showTagPicker.toggle() }
-            } else {
-                Image(systemName: "tag")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                    .onTapGesture { showTagPicker.toggle() }
-            }
-        }
-        .popover(isPresented: $showTagPicker, arrowEdge: .bottom) {
-            tagPickerContent
-        }
-    }
-    
-    private var tagPickerContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private var tagPills: some View {
+        FlowLayout(spacing: 3) {
             ForEach(availableTags, id: \.self) { tag in
-                Button(action: {
+                TagPill(
+                    label: tag,
+                    isSelected: clip.category == tag,
+                    color: tagColor(for: tag)
+                ) {
                     if clip.category == tag {
                         onTag(nil)
                     } else {
                         onTag(tag)
                     }
-                    showTagPicker = false
-                }) {
-                    HStack {
-                        Circle()
-                            .fill(tagColor(for: tag))
-                            .frame(width: 8, height: 8)
-                        Text(tag)
+                }
+            }
+            
+            // Add custom tag button
+            Text("+")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.secondary)
+                .frame(width: 18, height: 16)
+                .background(Color.gray.opacity(0.15))
+                .cornerRadius(8)
+                .onTapGesture { showTagPicker.toggle() }
+                .popover(isPresented: $showTagPicker, arrowEdge: .bottom) {
+                    HStack(spacing: 4) {
+                        TextField("New tag...", text: $newTagText)
+                            .textFieldStyle(.roundedBorder)
                             .font(.system(size: 12))
-                        Spacer()
-                        if clip.category == tag {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 10))
-                                .foregroundColor(.accentColor)
+                            .frame(width: 120)
+                            .onSubmit {
+                                let tag = newTagText.trimmingCharacters(in: .whitespaces)
+                                if !tag.isEmpty {
+                                    onAddTag(tag)
+                                    onTag(tag)
+                                    newTagText = ""
+                                    showTagPicker = false
+                                }
+                            }
+                        
+                        Button("Add") {
+                            let tag = newTagText.trimmingCharacters(in: .whitespaces)
+                            if !tag.isEmpty {
+                                onAddTag(tag)
+                                onTag(tag)
+                                newTagText = ""
+                                showTagPicker = false
+                            }
                         }
+                        .disabled(newTagText.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
-                    .contentShape(Rectangle())
+                    .padding(10)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-            }
-            
-            Divider()
-            
-            HStack(spacing: 4) {
-                TextField("New tag...", text: $newTagText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .onSubmit {
-                        let tag = newTagText.trimmingCharacters(in: .whitespaces)
-                        if !tag.isEmpty {
-                            onAddTag(tag)
-                            onTag(tag)
-                            newTagText = ""
-                            showTagPicker = false
-                        }
-                    }
-                
-                Button(action: {
-                    let tag = newTagText.trimmingCharacters(in: .whitespaces)
-                    if !tag.isEmpty {
-                        onAddTag(tag)
-                        onTag(tag)
-                        newTagText = ""
-                        showTagPicker = false
-                    }
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-                .disabled(newTagText.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            
-            if clip.category != nil {
-                Divider()
-                Button(action: {
-                    onTag(nil)
-                    showTagPicker = false
-                }) {
-                    HStack {
-                        Image(systemName: "xmark.circle")
-                            .font(.system(size: 10))
-                        Text("Remove tag")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundColor(.red)
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-            }
         }
-        .padding(6)
-        .frame(width: 180)
     }
     
     // MARK: - Helpers
