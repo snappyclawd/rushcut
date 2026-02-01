@@ -20,25 +20,46 @@ struct ClipGridView: View {
     
     var body: some View {
         ZStack {
-            ScrollView {
-                if store.groupMode == .none {
-                    flatGrid
-                } else {
-                    groupedGrid
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    // Invisible anchor at top
+                    Color.clear.frame(height: 0).id("scrollTop")
+                    
+                    if store.groupMode == .none {
+                        flatGrid
+                    } else {
+                        groupedGrid
+                    }
+                }
+                .gesture(
+                    MagnifyGesture()
+                        .onEnded { value in
+                            if value.magnification > 1.2 {
+                                store.gridColumns = max(1, store.gridColumns - 1)
+                            } else if value.magnification < 0.8 {
+                                store.gridColumns = min(5, store.gridColumns + 1)
+                            }
+                        }
+                )
+                .focusable()
+                .focused($isGridFocused)
+                .overlay(alignment: .bottomTrailing) {
+                    // Back to top button
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            scrollProxy.scrollTo("scrollTop", anchor: .top)
+                        }
+                    }) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .shadow(color: .black.opacity(0.2), radius: 3)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Back to top")
+                    .padding(16)
                 }
             }
-            .gesture(
-                MagnifyGesture()
-                    .onEnded { value in
-                        if value.magnification > 1.2 {
-                            store.gridColumns = max(1, store.gridColumns - 1)
-                        } else if value.magnification < 0.8 {
-                            store.gridColumns = min(5, store.gridColumns + 1)
-                        }
-                    }
-            )
-            .focusable()
-            .focused($isGridFocused)
             
             // Expanded player overlay
             if let clip = expandedClip {
@@ -140,21 +161,21 @@ struct ClipGridView: View {
         LazyVStack(alignment: .leading, spacing: 48) {
             ForEach(groupedSections, id: \.title) { section in
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 10) {
                         if store.groupMode == .rating {
                             ratingHeader(section.title)
                         } else {
                             Text(section.title)
-                                .font(.headline)
+                                .font(.system(size: 20, weight: .bold))
                         }
                         
                         Text("\(section.clips.count)")
-                            .font(.caption)
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 3)
                             .background(Color.gray.opacity(0.15))
-                            .cornerRadius(10)
+                            .cornerRadius(12)
                         
                         Spacer()
                     }
@@ -182,7 +203,7 @@ struct ClipGridView: View {
         let color = scoreColors[title] ?? .secondary
         
         return Text(title)
-            .font(.headline)
+            .font(.system(size: 24, weight: .bold))
             .foregroundColor(color)
     }
     

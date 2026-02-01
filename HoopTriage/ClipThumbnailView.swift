@@ -167,7 +167,7 @@ struct ClipThumbnailView: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
+                .onTapGesture {
                     onOpen()
                 }
             }
