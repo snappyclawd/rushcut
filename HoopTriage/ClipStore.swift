@@ -58,6 +58,7 @@ class ClipStore: ObservableObject {
     @Published var groupMode: GroupMode = .none
     @Published var availableTags: [String] = defaultTags
     @Published var showTagPickerForClipID: UUID? = nil
+    @Published var hoveredClipID: UUID? = nil
     
     // Undo/Redo stacks
     @Published var undoStack: [UndoAction] = []

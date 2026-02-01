@@ -4,7 +4,7 @@ import AVFoundation
 /// A single clip card with hover-scrub, poster, rating, and tags
 struct ClipThumbnailView: View {
     let clip: Clip
-    let isSelected: Bool
+    let isHovered: Bool
     @Binding var showTagPickerBinding: Bool
     let thumbnailGenerator: ThumbnailGenerator
     let availableTags: [String]
@@ -12,7 +12,7 @@ struct ClipThumbnailView: View {
     let onRate: (Int) -> Void
     let onTag: (String?) -> Void
     let onAddTag: (String) -> Void
-    let onSelect: () -> Void
+    let onHoverChange: (Bool) -> Void
     let onOpen: () -> Void
     
     @State private var posterImage: NSImage? = nil
@@ -100,6 +100,9 @@ struct ClipThumbnailView: View {
                     case .active(let location):
                         let wasHovering = isHovering
                         isHovering = true
+                        if !wasHovering {
+                            onHoverChange(true)
+                        }
                         let progress = max(0, min(1, location.x / geo.size.width))
                         hoverProgress = progress
                         currentTime = clip.duration * Double(progress)
@@ -131,6 +134,7 @@ struct ClipThumbnailView: View {
                         
                     case .ended:
                         isHovering = false
+                        onHoverChange(false)
                         scrubImage = nil
                         hoverProgress = 0
                         stopAudio()
@@ -171,11 +175,7 @@ struct ClipThumbnailView: View {
         }
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2.5)
-        )
-        .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : .black.opacity(0.2), radius: isSelected ? 4 : 2, y: 1)
+        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
         .onChange(of: showTagPickerBinding) { _, show in
             if show { showTagPicker = true }
         }

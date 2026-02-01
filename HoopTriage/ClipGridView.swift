@@ -12,46 +12,31 @@ struct ClipGridView: View {
     @ObservedObject var store: ClipStore
     let audioEnabled: Bool
     @State private var expandedClip: Clip? = nil
-    @State private var selectedClipID: UUID? = nil
     @FocusState private var isGridFocused: Bool
     
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: store.gridColumns)
     }
     
-    /// The flat list of clips currently displayed (for keyboard navigation indexing)
-    private var displayedClips: [Clip] {
-        store.sortedAndFilteredClips
-    }
-    
     var body: some View {
         ZStack {
-            ScrollViewReader { scrollProxy in
-                ScrollView {
-                    if store.groupMode == .none {
-                        flatGrid
-                    } else {
-                        groupedGrid
-                    }
-                }
-                .gesture(
-                    MagnifyGesture()
-                        .onEnded { value in
-                            if value.magnification > 1.2 {
-                                store.gridColumns = max(1, store.gridColumns - 1)
-                            } else if value.magnification < 0.8 {
-                                store.gridColumns = min(5, store.gridColumns + 1)
-                            }
-                        }
-                )
-                .onChange(of: selectedClipID) { _, newID in
-                    if let id = newID {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            scrollProxy.scrollTo(id, anchor: .center)
-                        }
-                    }
+            ScrollView {
+                if store.groupMode == .none {
+                    flatGrid
+                } else {
+                    groupedGrid
                 }
             }
+            .gesture(
+                MagnifyGesture()
+                    .onEnded { value in
+                        if value.magnification > 1.2 {
+                            store.gridColumns = max(1, store.gridColumns - 1)
+                        } else if value.magnification < 0.8 {
+                            store.gridColumns = min(5, store.gridColumns + 1)
+                        }
+                    }
+            )
             .focused($isGridFocused)
             
             // Expanded player overlay
@@ -77,17 +62,6 @@ struct ClipGridView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: expandedClip?.id)
         .animation(.easeInOut(duration: 0.15), value: store.gridColumns)
-        .onKeyPress(.upArrow) { navigateClip(by: -store.gridColumns); return .handled }
-        .onKeyPress(.downArrow) { navigateClip(by: store.gridColumns); return .handled }
-        .onKeyPress(.leftArrow) { navigateClip(by: -1); return .handled }
-        .onKeyPress(.rightArrow) { navigateClip(by: 1); return .handled }
-        .onKeyPress(.return) {
-            if expandedClip == nil, let id = selectedClipID,
-               let clip = displayedClips.first(where: { $0.id == id }) {
-                expandedClip = clip
-            }
-            return .handled
-        }
         .onKeyPress(.escape) {
             if expandedClip != nil {
                 expandedClip = nil
@@ -96,74 +70,54 @@ struct ClipGridView: View {
             }
             return .ignored
         }
+        // 1-5 rates the hovered clip
         .onKeyPress(characters: .init(charactersIn: "12345")) { press in
             guard expandedClip == nil else { return .ignored }
             if let digit = Int(String(press.characters)), (1...5).contains(digit),
-               let id = selectedClipID {
+               let id = store.hoveredClipID {
                 store.setRating(digit, for: id)
                 return .handled
             }
             return .ignored
         }
+        // T opens tag picker on hovered clip
         .onKeyPress(characters: .init(charactersIn: "t")) { press in
             guard expandedClip == nil else { return .ignored }
-            if let id = selectedClipID {
+            if let id = store.hoveredClipID {
                 store.showTagPickerForClipID = id
                 return .handled
             }
             return .ignored
         }
+        // Delete removes hovered clip
         .onKeyPress(.delete) {
             guard expandedClip == nil else { return .ignored }
-            if let id = selectedClipID {
-                removeSelectedClip(id: id)
+            if let id = store.hoveredClipID {
+                store.removeClip(id: id)
                 return .handled
             }
             return .ignored
         }
         .onKeyPress(.deleteForward) {
             guard expandedClip == nil else { return .ignored }
-            if let id = selectedClipID {
-                removeSelectedClip(id: id)
+            if let id = store.hoveredClipID {
+                store.removeClip(id: id)
+                return .handled
+            }
+            return .ignored
+        }
+        // Enter opens hovered clip
+        .onKeyPress(.return) {
+            guard expandedClip == nil else { return .ignored }
+            if let id = store.hoveredClipID,
+               let clip = store.sortedAndFilteredClips.first(where: { $0.id == id }) {
+                expandedClip = clip
                 return .handled
             }
             return .ignored
         }
         .onAppear {
             isGridFocused = true
-            if selectedClipID == nil, let first = displayedClips.first {
-                selectedClipID = first.id
-            }
-        }
-    }
-    
-    // MARK: - Keyboard Navigation
-    
-    /// Remove clip and move selection to the next one
-    private func removeSelectedClip(id: UUID) {
-        let clips = displayedClips
-        if let currentIndex = clips.firstIndex(where: { $0.id == id }) {
-            // Move selection to next clip (or previous if at end)
-            if clips.count > 1 {
-                let nextIndex = currentIndex < clips.count - 1 ? currentIndex + 1 : currentIndex - 1
-                selectedClipID = clips[nextIndex].id
-            } else {
-                selectedClipID = nil
-            }
-        }
-        store.removeClip(id: id)
-    }
-    
-    private func navigateClip(by offset: Int) {
-        let clips = displayedClips
-        guard !clips.isEmpty else { return }
-        
-        if let currentID = selectedClipID,
-           let currentIndex = clips.firstIndex(where: { $0.id == currentID }) {
-            let newIndex = max(0, min(clips.count - 1, currentIndex + offset))
-            selectedClipID = clips[newIndex].id
-        } else {
-            selectedClipID = clips.first?.id
         }
     }
     
@@ -184,7 +138,6 @@ struct ClipGridView: View {
         LazyVStack(alignment: .leading, spacing: 20) {
             ForEach(groupedSections, id: \.title) { section in
                 VStack(alignment: .leading, spacing: 8) {
-                    // Section header
                     HStack(spacing: 8) {
                         if store.groupMode == .rating {
                             ratingHeader(section.title)
@@ -205,7 +158,6 @@ struct ClipGridView: View {
                     }
                     .padding(.horizontal, 12)
                     
-                    // Clips in this section
                     LazyVGrid(columns: columns, spacing: 8) {
                         ForEach(section.clips) { clip in
                             clipCard(clip)
@@ -264,7 +216,6 @@ struct ClipGridView: View {
                 let key = clip.category ?? "Untagged"
                 groups[key, default: []].append(clip)
             }
-            // Sort: tagged groups first (alphabetical), untagged last
             let sorted = groups.sorted { a, b in
                 if a.key == "Untagged" { return false }
                 if b.key == "Untagged" { return true }
@@ -279,7 +230,7 @@ struct ClipGridView: View {
     private func clipCard(_ clip: Clip) -> some View {
         ClipThumbnailView(
             clip: clip,
-            isSelected: selectedClipID == clip.id,
+            isHovered: store.hoveredClipID == clip.id,
             showTagPickerBinding: Binding(
                 get: { store.showTagPickerForClipID == clip.id },
                 set: { if !$0 { store.showTagPickerForClipID = nil } }
@@ -296,11 +247,10 @@ struct ClipGridView: View {
             onAddTag: { tag in
                 store.addTag(tag)
             },
-            onSelect: {
-                selectedClipID = clip.id
+            onHoverChange: { hovering in
+                store.hoveredClipID = hovering ? clip.id : nil
             },
             onOpen: {
-                selectedClipID = clip.id
                 expandedClip = clip
             }
         )
