@@ -28,7 +28,7 @@ struct TrackpadScrubOverlay: NSViewRepresentable {
         
         override func scrollWheel(with event: NSEvent) {
             // Only handle trackpad (momentum) scrolling, not mouse wheel
-            if event.phase != .none || event.momentumPhase != .none {
+            if event.phase != [] || event.momentumPhase != [] {
                 let delta = event.scrollingDeltaX
                 if abs(delta) > 0.5 {
                     onScrub?(delta)
