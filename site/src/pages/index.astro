@@ -1,0 +1,522 @@
+---
+import Layout from '../layouts/Layout.astro'
+
+// The RushCut logo as an inline SVG component
+const logoSvg = `<svg viewBox="0 0 488 486" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M402.562 66.126H162.371l50.064 87.336a131.5 131.5 0 0 1 53.852-15.688c56.5 0 102.3 46.88 102.3 104.709 0 39.377-18.79 74.519-52.635 91.539l86.61 151.048c46.699 0 84.547-47.809 84.547-86.563V152.672c0-47.8-37.848-86.546-84.547-86.546Z" fill="currentColor"/>
+  <path d="M266.287 347.192c-56.5 0-102.302-46.88-102.302-104.709 0-24.634 10.243-47.284 22.242-65.148L84.548 0C37.854 0 0 38.753 0 86.546v245.836C0 380.187 37.854 418.939 84.548 418.939h240.193l-41.928-73.126a106.3 106.3 0 0 1-16.526 1.379Z" fill="currentColor"/>
+  <path fill-rule="evenodd" d="M265.691 267.402c-13.524 0-24.487-11.157-24.487-25.063 0-13.843 10.963-25.065 24.487-25.065 13.525 0 24.489 11.222 24.489 25.065 0 13.843-10.964 25.063-24.489 25.063Zm0-103.391c-42.263 0-76.524 35.259-76.524 78.328 0 43.257 34.261 78.327 76.524 78.327 42.266 0 76.527-35.07 76.527-78.327 0-43.259-34.261-78.328-76.527-78.328Z" fill="currentColor"/>
+</svg>`
+---
+
+<Layout title="RushCut — Triage your footage before the edit">
+
+  <!-- ==================== NAV ==================== -->
+  <nav class="fixed top-0 inset-x-0 z-50 border-b border-white/[0.06]" id="nav">
+    <div class="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-4 lg:px-10">
+      <a href="/" class="group flex items-center gap-2.5">
+        <span class="inline-flex size-8 text-brand-500 transition-transform group-hover:scale-110">
+          <Fragment set:html={logoSvg} />
+        </span>
+        <span class="text-[15px] font-bold tracking-tight text-white">RushCut</span>
+      </a>
+      <div class="flex items-center gap-8 text-[13px] font-medium text-surface-400">
+        <a href="#features" class="hidden transition hover:text-white sm:block">Features</a>
+        <a href="#how-it-works" class="hidden transition hover:text-white sm:block">How it works</a>
+        <a href="#pricing" class="hidden transition hover:text-white sm:block">Pricing</a>
+        <a href="#pricing" class="relative overflow-hidden rounded-full bg-white px-5 py-2 font-semibold text-surface-950 transition hover:bg-surface-100">
+          Buy for $49
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Blur backdrop for nav on scroll -->
+  <script>
+    const nav = document.getElementById('nav')
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 20) {
+        nav?.classList.add('bg-surface-950/70', 'backdrop-blur-2xl')
+      } else {
+        nav?.classList.remove('bg-surface-950/70', 'backdrop-blur-2xl')
+      }
+    })
+  </script>
+
+  <!-- ==================== HERO ==================== -->
+  <section class="relative min-h-screen flex items-center overflow-hidden">
+    <!-- Background effects -->
+    <div class="pointer-events-none absolute inset-0">
+      <!-- Large gradient orb -->
+      <div class="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[1000px] h-[800px] rounded-full bg-brand-500/[0.07] blur-[120px]"></div>
+      <!-- Grid pattern -->
+      <div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]"></div>
+    </div>
+
+    <div class="relative mx-auto max-w-[1400px] w-full px-6 pt-32 pb-20 lg:px-10 lg:pt-40 lg:pb-32">
+      <div class="max-w-3xl">
+        <!-- Pill badge -->
+        <div class="animate-slide-up mb-8 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] py-1.5 pl-1.5 pr-4">
+          <span class="rounded-full bg-brand-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-white">New</span>
+          <span class="text-[13px] text-surface-400">Native macOS app for videographers</span>
+        </div>
+
+        <!-- Headline -->
+        <h1 class="animate-slide-up-delayed text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] tracking-[-0.035em]">
+          Triage your footage<br/>
+          <span class="text-gradient">before the edit.</span>
+        </h1>
+
+        <!-- Sub -->
+        <p class="animate-slide-up-delayed-2 mt-6 max-w-xl text-lg leading-relaxed text-surface-400 lg:text-xl">
+          200 clips. Identical thumbnails. Hours of scrubbing in Finder before the real work starts. RushCut fixes that.
+        </p>
+
+        <!-- CTA row -->
+        <div class="animate-slide-up-delayed-2 mt-10 flex flex-wrap items-center gap-4">
+          <a href="#pricing" class="group relative inline-flex items-center gap-2 rounded-full bg-brand-500 px-7 py-3.5 text-[15px] font-bold text-white shadow-[0_0_40px_rgba(249,115,22,0.3)] transition hover:bg-brand-600 hover:shadow-[0_0_60px_rgba(249,115,22,0.4)]">
+            Buy for $49
+            <svg class="size-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
+          </a>
+          <span class="text-[13px] text-surface-600">One-time purchase. No subscription. Ever.</span>
+        </div>
+      </div>
+
+      <!-- Hero visual: floating app mockup -->
+      <div class="mt-16 lg:mt-20 animate-fade-in">
+        <div class="relative">
+          <!-- Window chrome mockup -->
+          <div class="rounded-xl border border-white/[0.08] bg-surface-900/80 shadow-2xl shadow-black/40 overflow-hidden">
+            <!-- Title bar -->
+            <div class="flex items-center gap-2 border-b border-white/[0.06] px-4 py-3">
+              <div class="flex gap-1.5">
+                <div class="size-3 rounded-full bg-[#ff5f57]"></div>
+                <div class="size-3 rounded-full bg-[#febc2e]"></div>
+                <div class="size-3 rounded-full bg-[#28c840]"></div>
+              </div>
+              <div class="mx-auto flex items-center gap-1.5 text-[11px] text-surface-500">
+                <span class="inline-flex size-4 text-brand-500"><Fragment set:html={logoSvg} /></span>
+                RushCut — Wedding Day B-Roll
+              </div>
+              <div class="w-12"></div>
+            </div>
+            <!-- App content mockup -->
+            <div class="flex">
+              <!-- Sidebar -->
+              <div class="hidden w-56 shrink-0 border-r border-white/[0.06] bg-surface-950/50 p-3 sm:block">
+                <div class="mb-3 text-[10px] font-semibold uppercase tracking-widest text-surface-600">Folders</div>
+                <div class="space-y-0.5 text-[12px]">
+                  <div class="rounded-md bg-brand-500/10 px-2.5 py-1.5 text-brand-400">Wedding Day B-Roll</div>
+                  <div class="rounded-md px-2.5 py-1.5 text-surface-500 hover:text-surface-300">Ceremony</div>
+                  <div class="rounded-md px-2.5 py-1.5 text-surface-500 hover:text-surface-300">Reception</div>
+                  <div class="rounded-md px-2.5 py-1.5 text-surface-500 hover:text-surface-300">Prep / Getting Ready</div>
+                </div>
+                <div class="mb-3 mt-6 text-[10px] font-semibold uppercase tracking-widest text-surface-600">Filters</div>
+                <div class="space-y-1 text-[12px] text-surface-500">
+                  <div class="flex items-center gap-2"><span class="text-yellow-400">&#9733;&#9733;&#9733;&#9733;&#9733;</span> <span class="text-surface-600">12</span></div>
+                  <div class="flex items-center gap-2"><span class="text-yellow-400">&#9733;&#9733;&#9733;&#9733;</span><span class="text-surface-700">&#9733;</span> <span class="text-surface-600">28</span></div>
+                  <div class="flex items-center gap-2"><span class="text-yellow-400">&#9733;&#9733;&#9733;</span><span class="text-surface-700">&#9733;&#9733;</span> <span class="text-surface-600">45</span></div>
+                </div>
+              </div>
+              <!-- Grid -->
+              <div class="grid flex-1 grid-cols-3 gap-1 p-1 sm:grid-cols-4 lg:grid-cols-5">
+                <!-- Simulate clip thumbnails with colored rectangles -->
+                {Array.from({ length: 15 }).map((_, i) => {
+                  const hues = [20, 25, 30, 200, 210, 15, 35, 190, 25, 30, 205, 20, 15, 25, 195]
+                  const ratings = [5, 4, 3, 5, 0, 4, 3, 0, 5, 4, 3, 0, 5, 4, 0]
+                  const tags = ['', 'keeper', '', 'loud-peak', '', '', 'b-roll', '', 'keeper', '', '', 'quiet', '', 'loud-peak', '']
+                  return (
+                    <div class="group relative aspect-video overflow-hidden rounded-sm">
+                      <div class={`absolute inset-0 bg-gradient-to-br`} style={`background: linear-gradient(135deg, hsl(${hues[i]}, 30%, ${12 + i * 2}%), hsl(${hues[i]}, 20%, ${8 + i}%))`}></div>
+                      {/* Fake scrub position indicator */}
+                      <div class="absolute bottom-0 left-0 h-0.5 bg-brand-500/60" style={`width: ${30 + (i * 17) % 70}%`}></div>
+                      {/* Rating badge */}
+                      {ratings[i] > 0 && (
+                        <div class="absolute top-1 right-1 flex items-center gap-0.5 rounded bg-black/60 px-1 py-0.5 text-[9px] font-bold text-yellow-400">
+                          {ratings[i]}<span class="text-[8px]">&#9733;</span>
+                        </div>
+                      )}
+                      {/* Tag */}
+                      {tags[i] && (
+                        <div class="absolute bottom-1.5 left-1 rounded-full bg-brand-500/80 px-1.5 py-0.5 text-[8px] font-medium text-white">
+                          {tags[i]}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+          <!-- Glow underneath -->
+          <div class="absolute -bottom-8 left-1/2 -translate-x-1/2 h-32 w-3/4 rounded-full bg-brand-500/10 blur-[80px]"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== SOCIAL PROOF / TAGLINE STRIP ==================== -->
+  <section class="border-y border-white/[0.06] py-10">
+    <div class="mx-auto max-w-[1400px] px-6 lg:px-10">
+      <div class="flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
+        <p class="text-center text-sm font-medium text-surface-500 sm:text-left">
+          Built for sports videographers. And anyone who drowns in 100s of short clips with identical thumbnails.
+        </p>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1 text-brand-500">
+            <svg class="size-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            <svg class="size-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            <svg class="size-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            <svg class="size-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            <svg class="size-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+          </div>
+          <span class="text-sm text-surface-500">macOS native. SwiftUI. No Electron.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== PROBLEM ==================== -->
+  <section class="py-24 lg:py-36">
+    <div class="mx-auto max-w-[1400px] px-6 lg:px-10">
+      <div class="mx-auto max-w-3xl text-center">
+        <h2 class="text-[clamp(1.75rem,4vw,3.25rem)] font-extrabold leading-tight tracking-[-0.03em]">
+          You're not editing.<br/>
+          You're <span class="text-surface-500 line-through decoration-brand-500/60 decoration-[3px]">looking for the good clips</span>.
+        </h2>
+        <p class="mt-6 text-lg text-surface-400 leading-relaxed">
+          Every shoot ends the same way. 200 clips dumped into a folder. Every thumbnail looks identical. You open each one in QuickTime, scrub to the middle, close it. Repeat. For hours. The edit hasn't even started and you're already exhausted.
+        </p>
+      </div>
+
+      <!-- Pain point cards -->
+      <div class="mt-16 grid gap-4 sm:grid-cols-3">
+        <div class="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 transition hover:border-brand-500/20 hover:bg-brand-500/[0.03]">
+          <div class="mb-5 flex size-14 items-center justify-center rounded-xl bg-surface-800/80">
+            <svg class="size-7 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v13.5a2.25 2.25 0 002.25 2.25z"/>
+            </svg>
+          </div>
+          <h3 class="text-[17px] font-bold">200 identical thumbnails</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-500">Finder shows you the first frame. For every clip. They all look the same. Good luck finding that one perfect reaction shot.</p>
+        </div>
+
+        <div class="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 transition hover:border-brand-500/20 hover:bg-brand-500/[0.03]">
+          <div class="mb-5 flex size-14 items-center justify-center rounded-xl bg-surface-800/80">
+            <svg class="size-7 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <h3 class="text-[17px] font-bold">Hours before you edit</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-500">Open, scrub, close. Open, scrub, close. You spend more time triaging footage than actually cutting the video together.</p>
+        </div>
+
+        <div class="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 transition hover:border-brand-500/20 hover:bg-brand-500/[0.03]">
+          <div class="mb-5 flex size-14 items-center justify-center rounded-xl bg-surface-800/80">
+            <svg class="size-7 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+            </svg>
+          </div>
+          <h3 class="text-[17px] font-bold">Half the footage is junk</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-500">Bad takes. Shaky shots. Lens caps. But you don't know which ones until you've painfully watched every single clip.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== FEATURES — BENTO GRID ==================== -->
+  <section id="features" class="border-t border-white/[0.06] py-24 lg:py-36">
+    <div class="mx-auto max-w-[1400px] px-6 lg:px-10">
+      <div class="mx-auto max-w-2xl text-center">
+        <p class="text-[13px] font-bold uppercase tracking-[0.15em] text-brand-500">Features</p>
+        <h2 class="mt-4 text-[clamp(1.75rem,4vw,3.25rem)] font-extrabold leading-tight tracking-[-0.03em]">
+          Built for the part of<br class="hidden sm:block"/> video work nobody talks about.
+        </h2>
+      </div>
+
+      <!-- Bento grid -->
+      <div class="mt-16 grid gap-4 lg:grid-cols-3 lg:grid-rows-[auto_auto]">
+        
+        <!-- Card 1: Hover scrub — LARGE -->
+        <div class="bento-card group relative overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 lg:col-span-2 lg:row-span-1">
+          <div class="relative z-10">
+            <h3 class="text-xl font-bold">Hover to scrub</h3>
+            <p class="mt-2 max-w-md text-sm leading-relaxed text-surface-400">
+              Move your mouse across any thumbnail to scrub through the entire clip. No clicking. No waiting. No QuickTime. Just pure, instant previews.
+            </p>
+          </div>
+          <!-- Visual: scrub progress illustration -->
+          <div class="relative mt-8 flex gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div class="relative aspect-video flex-1 overflow-hidden rounded-lg bg-surface-800/50">
+                <div class="absolute inset-0 bg-gradient-to-br from-surface-700/30 to-surface-800/50"></div>
+                {/* Scrub cursor on 3rd card */}
+                {i === 2 && (
+                  <>
+                    <div class="absolute inset-0 border-2 border-brand-500 rounded-lg"></div>
+                    <div class="absolute top-0 bottom-0 left-[60%] w-0.5 bg-brand-500 animate-pulse-glow"></div>
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-surface-700">
+                      <div class="h-full w-[60%] bg-brand-500 rounded-full"></div>
+                    </div>
+                  </>
+                )}
+                {/* Rating dots */}
+                {[5, 4, 0, 3, 5, 0][i] > 0 && (
+                  <div class="absolute top-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-bold text-yellow-400">
+                    {[5, 4, 0, 3, 5, 0][i]}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <!-- Card 2: Keyboard rating -->
+        <div class="bento-card group overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8">
+          <h3 class="text-xl font-bold">Keyboard-first rating</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-400">
+            Hit a number. Move on. Your hands never leave the keyboard.
+          </p>
+          <!-- Visual: keyboard keys -->
+          <div class="mt-8 flex justify-center gap-2">
+            <span class="kbd text-lg">1</span>
+            <span class="kbd text-lg">2</span>
+            <span class="kbd text-lg">3</span>
+            <span class="kbd text-lg text-brand-400 ring-1 ring-brand-500/40 !bg-brand-500/10">4</span>
+            <span class="kbd text-lg">5</span>
+          </div>
+          <div class="mt-4 flex justify-center gap-2">
+            <span class="kbd">&larr;</span>
+            <span class="kbd">&darr;</span>
+            <span class="kbd">&uarr;</span>
+            <span class="kbd">&rarr;</span>
+          </div>
+          <p class="mt-4 text-center text-[11px] text-surface-600">Arrow keys to navigate. Numbers to rate.</p>
+        </div>
+
+        <!-- Card 3: Audio triage -->
+        <div class="bento-card group overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8">
+          <h3 class="text-xl font-bold">Smart audio triage</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-400">
+            RushCut analyzes audio loudness to surface the moments that matter — dialogue, reactions, action — and auto-tags them.
+          </p>
+          <!-- Visual: waveform -->
+          <div class="mt-8 flex h-20 items-end gap-[2px]">
+            {Array.from({ length: 40 }).map((_, i) => {
+              const heights = [12,18,14,20,15,40,65,80,72,55,30,18,12,15,20,25,18,14,50,70,85,75,60,35,20,15,12,18,22,35,55,45,30,20,15,12,10,14,18,12]
+              const isLoud = heights[i] > 55
+              return (
+                <div 
+                  class={`flex-1 rounded-full transition-colors ${isLoud ? 'bg-brand-500' : 'bg-surface-700'}`}
+                  style={`height: ${heights[i]}%`}
+                ></div>
+              )
+            })}
+          </div>
+          <div class="mt-3 flex items-center justify-between text-[10px] text-surface-600">
+            <span>Quiet</span>
+            <div class="flex items-center gap-1.5">
+              <span class="inline-block size-2 rounded-full bg-brand-500"></span>
+              <span class="text-brand-400">Loud peaks auto-tagged</span>
+            </div>
+            <span>Loud</span>
+          </div>
+        </div>
+
+        <!-- Card 4: Tags & filters — LARGE -->
+        <div class="bento-card group overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 lg:col-span-2">
+          <div class="flex flex-col lg:flex-row lg:items-start lg:gap-12">
+            <div class="shrink-0">
+              <h3 class="text-xl font-bold">Tags, filters, hide the junk</h3>
+              <p class="mt-2 max-w-sm text-sm leading-relaxed text-surface-400">
+                Create custom tags. Apply them in bulk with audio triage. Filter your grid down to exactly what you need. One toggle to hide every clip you haven't touched.
+              </p>
+            </div>
+            <!-- Visual: tag pills -->
+            <div class="mt-6 flex flex-wrap gap-2 lg:mt-0">
+              <span class="rounded-full bg-brand-500/15 border border-brand-500/20 px-3 py-1.5 text-[12px] font-medium text-brand-400">keeper</span>
+              <span class="rounded-full bg-emerald-500/15 border border-emerald-500/20 px-3 py-1.5 text-[12px] font-medium text-emerald-400">loud-peak</span>
+              <span class="rounded-full bg-blue-500/15 border border-blue-500/20 px-3 py-1.5 text-[12px] font-medium text-blue-400">b-roll</span>
+              <span class="rounded-full bg-violet-500/15 border border-violet-500/20 px-3 py-1.5 text-[12px] font-medium text-violet-400">reaction</span>
+              <span class="rounded-full bg-rose-500/15 border border-rose-500/20 px-3 py-1.5 text-[12px] font-medium text-rose-400">interview</span>
+              <span class="rounded-full bg-amber-500/15 border border-amber-500/20 px-3 py-1.5 text-[12px] font-medium text-amber-400">quiet</span>
+              <span class="rounded-full bg-surface-700/50 border border-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-surface-500 line-through">shaky</span>
+              <span class="rounded-full bg-surface-700/50 border border-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-surface-500 line-through">lens-cap</span>
+              <span class="rounded-full bg-surface-700/50 border border-white/[0.06] px-3 py-1.5 text-[12px] font-medium text-surface-500 line-through">bad-take</span>
+              <span class="rounded-full bg-cyan-500/15 border border-cyan-500/20 px-3 py-1.5 text-[12px] font-medium text-cyan-400">ceremony</span>
+              <span class="rounded-full bg-pink-500/15 border border-pink-500/20 px-3 py-1.5 text-[12px] font-medium text-pink-400">first-dance</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== HOW IT WORKS ==================== -->
+  <section id="how-it-works" class="border-t border-white/[0.06] bg-white/[0.015] py-24 lg:py-36">
+    <div class="mx-auto max-w-[1400px] px-6 lg:px-10">
+      <div class="mx-auto max-w-2xl text-center">
+        <p class="text-[13px] font-bold uppercase tracking-[0.15em] text-brand-500">How it works</p>
+        <h2 class="mt-4 text-[clamp(1.75rem,4vw,3.25rem)] font-extrabold leading-tight tracking-[-0.03em]">
+          Four steps. That's it.
+        </h2>
+      </div>
+
+      <div class="mt-16 grid gap-px overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.04] sm:grid-cols-2 lg:grid-cols-4">
+        <!-- Step 1 -->
+        <div class="relative bg-surface-950 p-8">
+          <div class="mb-6 flex size-10 items-center justify-center rounded-full bg-brand-500 text-sm font-extrabold text-white">1</div>
+          <h3 class="text-lg font-bold">Drop a folder</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-500">Point RushCut at your footage folder. It scans every video file and generates thumbnails instantly.</p>
+        </div>
+        <!-- Step 2 -->
+        <div class="relative bg-surface-950 p-8">
+          <div class="mb-6 flex size-10 items-center justify-center rounded-full bg-brand-500 text-sm font-extrabold text-white">2</div>
+          <h3 class="text-lg font-bold">Scrub & rate</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-500">Hover to preview any clip. Hit 1-5 to rate. Arrow keys to navigate. Hundreds of clips in minutes.</p>
+        </div>
+        <!-- Step 3 -->
+        <div class="relative bg-surface-950 p-8">
+          <div class="mb-6 flex size-10 items-center justify-center rounded-full bg-brand-500 text-sm font-extrabold text-white">3</div>
+          <h3 class="text-lg font-bold">Tag & triage</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-500">Run audio analysis to auto-tag clips. Add your own tags. Rename the keepers. Filter out the junk.</p>
+        </div>
+        <!-- Step 4 -->
+        <div class="relative bg-surface-950 p-8">
+          <div class="mb-6 flex size-10 items-center justify-center rounded-full bg-brand-500 text-sm font-extrabold text-white">4</div>
+          <h3 class="text-lg font-bold">Export & edit</h3>
+          <p class="mt-2 text-sm leading-relaxed text-surface-500">Export your organized clips — only the good stuff — ready for Premiere, Resolve, Final Cut, or whatever you use.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== DETAILS STRIP ==================== -->
+  <section class="border-t border-white/[0.06] py-24 lg:py-36">
+    <div class="mx-auto max-w-[1400px] px-6 lg:px-10">
+      <div class="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <div class="mb-3 text-3xl font-black text-gradient">Native</div>
+          <p class="text-sm leading-relaxed text-surface-500">SwiftUI from top to bottom. Fast, lightweight, uses zero background resources. No Electron. No web views. A real Mac app.</p>
+        </div>
+        <div>
+          <div class="mb-3 text-3xl font-black text-gradient">Instant</div>
+          <p class="text-sm leading-relaxed text-surface-500">Thumbnails generate in seconds. Hover-scrub is realtime. No progress bars, no "processing". It just works.</p>
+        </div>
+        <div>
+          <div class="mb-3 text-3xl font-black text-gradient">Undoable</div>
+          <p class="text-sm leading-relaxed text-surface-500">Every single action — rate, tag, rename — is fully undoable. Cmd+Z like you'd expect from any native Mac app.</p>
+        </div>
+        <div>
+          <div class="mb-3 text-3xl font-black text-gradient">Yours</div>
+          <p class="text-sm leading-relaxed text-surface-500">One-time purchase. No account. No telemetry. No cloud. Your footage stays on your machine. Period.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== PRICING ==================== -->
+  <section id="pricing" class="border-t border-white/[0.06] bg-white/[0.015] py-24 lg:py-36">
+    <div class="mx-auto max-w-[1400px] px-6 lg:px-10">
+      <div class="mx-auto max-w-3xl">
+        <div class="text-center">
+          <p class="text-[13px] font-bold uppercase tracking-[0.15em] text-brand-500">Pricing</p>
+          <h2 class="mt-4 text-[clamp(1.75rem,4vw,3.25rem)] font-extrabold leading-tight tracking-[-0.03em]">
+            No subscription. No tricks.
+          </h2>
+          <p class="mt-4 text-lg text-surface-400">Pay once. Own it forever. Like software used to work.</p>
+        </div>
+
+        <!-- Pricing card -->
+        <div class="relative mx-auto mt-14 max-w-md overflow-hidden rounded-3xl border border-white/[0.08] bg-surface-900/40">
+          <!-- Top highlight -->
+          <div class="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-brand-500/50 to-transparent"></div>
+          
+          <div class="p-10 text-center">
+            <!-- Logo -->
+            <div class="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-500">
+              <div class="size-9"><Fragment set:html={logoSvg} /></div>
+            </div>
+
+            <div class="text-6xl font-extrabold tracking-tight">$49</div>
+            <p class="mt-2 text-surface-500">One-time purchase</p>
+
+            <div class="my-8 h-px bg-white/[0.06]"></div>
+
+            <ul class="space-y-4 text-left text-[15px]">
+              <li class="flex items-start gap-3">
+                <svg class="mt-0.5 size-5 shrink-0 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                <span class="text-surface-300">Every feature. No tiers, no upsells.</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="mt-0.5 size-5 shrink-0 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                <span class="text-surface-300">1 year of free updates included.</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="mt-0.5 size-5 shrink-0 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                <span class="text-surface-300">App works forever — even without renewal.</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <svg class="mt-0.5 size-5 shrink-0 text-surface-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6"/></svg>
+                <span class="text-surface-500">Optional <strong class="text-surface-300">$29/year</strong> to keep getting updates.</span>
+              </li>
+            </ul>
+
+            <a href="#" class="mt-8 block rounded-full bg-brand-500 py-4 text-center text-[15px] font-bold text-white shadow-[0_0_40px_rgba(249,115,22,0.25)] transition hover:bg-brand-600 hover:shadow-[0_0_60px_rgba(249,115,22,0.35)]">
+              Buy RushCut
+            </a>
+            <p class="mt-4 text-[12px] text-surface-600">macOS 14+ required. Instant download after purchase.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== FINAL CTA ==================== -->
+  <section class="border-t border-white/[0.06] py-24 lg:py-36">
+    <div class="mx-auto max-w-[1400px] px-6 lg:px-10">
+      <div class="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-white/[0.02] px-8 py-20 text-center lg:px-20">
+        <!-- Background glow -->
+        <div class="pointer-events-none absolute inset-0">
+          <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-[500px] rounded-full bg-brand-500/[0.06] blur-[100px]"></div>
+        </div>
+
+        <div class="relative">
+          <div class="mx-auto mb-8 flex size-20 items-center justify-center rounded-3xl bg-brand-500/10 text-brand-500 animate-float">
+            <div class="size-11"><Fragment set:html={logoSvg} /></div>
+          </div>
+          <h2 class="text-[clamp(1.75rem,4vw,3rem)] font-extrabold leading-tight tracking-[-0.03em]">
+            Your footage isn't going to<br class="hidden sm:block"/> triage itself.
+          </h2>
+          <p class="mt-4 text-lg text-surface-400">
+            Stop wasting hours in Finder. Start cutting the actual video.
+          </p>
+          <a href="#pricing" class="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-8 py-4 text-[15px] font-bold text-surface-950 transition hover:bg-surface-100">
+            Get RushCut for $49
+            <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="border-t border-white/[0.06] py-10">
+    <div class="mx-auto flex max-w-[1400px] flex-col items-center gap-6 px-6 sm:flex-row sm:justify-between lg:px-10">
+      <div class="flex items-center gap-2.5">
+        <span class="inline-flex size-6 text-brand-500"><Fragment set:html={logoSvg} /></span>
+        <span class="text-[13px] font-semibold text-surface-500">RushCut</span>
+      </div>
+      <p class="text-[12px] text-surface-700">&copy; {new Date().getFullYear()} RushCut. All rights reserved.</p>
+    </div>
+  </footer>
+
+</Layout>
