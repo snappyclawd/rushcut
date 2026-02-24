@@ -3,7 +3,7 @@ import SwiftUI
 /// Custom tag picker with wrapping pill layout and keyboard navigation
 struct TagPickerView: View {
     let availableTags: [String]
-    let selectedTags: Set<String>
+    let selectedTags: [String]
     let onToggleTag: (String) -> Void
     let onAddTag: (String) -> Void
     let onDismiss: () -> Void

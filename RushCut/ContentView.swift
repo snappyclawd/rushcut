@@ -4,9 +4,10 @@ import UniformTypeIdentifiers
 /// Main app view — slim top bar + collapsible sidebar + clip grid.
 struct ContentView: View {
     @EnvironmentObject var store: ClipStore
+    @EnvironmentObject var settings: AppSettings
     @State private var isDragTargeted = false
     @State private var audioEnabled = false
-    @State private var showExport = false
+    @State private var showCommit = false
     @State private var showAudioTriage = false
     @State private var sidebarVisible = true
     
@@ -50,9 +51,9 @@ struct ContentView: View {
         .onDrop(of: [.fileURL], isTargeted: $isDragTargeted) { providers in
             handleDrop(providers)
         }
-        .sheet(isPresented: $showExport) {
+        .sheet(isPresented: $showCommit) {
             ExportView(store: store) {
-                showExport = false
+                showCommit = false
             }
         }
         .sheet(isPresented: $showAudioTriage) {
@@ -79,9 +80,8 @@ struct ContentView: View {
             }
             
             // Logo
-            HStack(spacing: 8) {
-                Text("🎬")
-                    .font(.title2)
+            HStack(spacing: 6) {
+                RushCutLogo(size: 20)
                 Text("RushCut")
                     .font(.system(size: 16, weight: .bold))
             }
@@ -94,7 +94,19 @@ struct ContentView: View {
                     statBadge("\(store.totalClips)", label: "clips")
                     statBadge("\(store.ratedClips)", label: "rated")
                     statBadge("\(store.taggedClips)", label: "tagged")
-                    statBadge(store.totalDurationFormatted, label: "footage")
+                    if store.hasShortlistedClips {
+                        HStack(spacing: 4) {
+                            Text(store.shortlistedDurationFormatted)
+                                .fontWeight(.semibold)
+                            Text("shortlisted")
+                                .foregroundColor(.secondary)
+                            Text("(\(store.totalDurationFormatted) total)")
+                                .foregroundColor(.secondary.opacity(0.7))
+                        }
+                        .fixedSize()
+                    } else {
+                        statBadge(store.totalDurationFormatted, label: "footage")
+                    }
                 }
                 .font(.system(size: 12))
             }
@@ -135,6 +147,7 @@ struct ContentView: View {
     // MARK: - Sidebar
     
     private var sidebar: some View {
+        VStack(spacing: 0) {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 
@@ -159,6 +172,21 @@ struct ContentView: View {
                                 }
                             }
                         }
+                    }
+                    
+                    // Hide untouched
+                    HStack {
+                        Image(systemName: store.hideUntouched ? "eye.slash" : "eye")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .frame(width: 16)
+                        Text("Hide untouched")
+                            .font(.system(size: 12))
+                        Spacer()
+                        Toggle("", isOn: $store.hideUntouched)
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
+                            .labelsHidden()
                     }
                     
                     // Tag filter
@@ -270,91 +298,116 @@ struct ContentView: View {
                         .padding(.vertical, 4)
                     }
                     .buttonStyle(.plain)
-                    
-                    if store.suggestedCount > 0 {
-                        Button(action: { store.acceptAllSuggestions() }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "checkmark.circle")
-                                    .frame(width: 16)
-                                Text("Accept All (\(store.suggestedCount))")
-                                Spacer()
-                            }
-                            .font(.system(size: 12))
-                            .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    
-                    Button(action: { showExport = true }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "square.and.arrow.up")
-                                .frame(width: 16)
-                            Text("Export")
-                            Spacer()
-                        }
-                        .font(.system(size: 12))
-                        .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
-                }
-                
-                // MARK: Export Preview
-                if let tree = store.exportPreviewTree {
-                    sidebarDivider
-                    
-                    sidebarSection("Export Preview") {
-                        VStack(alignment: .leading, spacing: 2) {
-                            // Root folder
-                            HStack(spacing: 4) {
-                                Image(systemName: "folder.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.orange)
-                                Text("RushCut/")
-                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(.primary)
-                            }
-                            
-                            // Rating subfolders
-                            ForEach(tree) { folder in
-                                ExportTreeFolderRow(folder: folder)
-                                    .padding(.leading, 14)
-                            }
-                            
-                            // Metadata files
-                            HStack(spacing: 4) {
-                                Image(systemName: "doc.text")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.secondary)
-                                Text("rushcut.json")
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.leading, 14)
-                            
-                            HStack(spacing: 4) {
-                                Image(systemName: "doc.text")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.secondary)
-                                Text("rushcut.csv")
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.leading, 14)
-                        }
-                        
-                        // Summary
-                        if store.exportSkippedCount > 0 {
-                            Text("\(store.exportSkippedCount) untouched clip\(store.exportSkippedCount == 1 ? "" : "s") will be skipped")
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                                .padding(.top, 4)
-                        }
-                    }
                 }
                 
                 Spacer(minLength: 16)
             }
             .padding(.horizontal, 16)
+        }
+        
+        // MARK: Folder Preview (pinned above commit)
+        if let tree = store.exportPreviewTree {
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Folder Preview")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.5)
+                    
+                    Spacer()
+                    
+                    // Compact organization mode picker
+                    Picker("", selection: $store.folderOrganization) {
+                        Image(systemName: "tag.fill").tag(FolderOrganization.byTag)
+                        Image(systemName: "star.fill").tag(FolderOrganization.byRating)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 60)
+                    .controlSize(.mini)
+                    .help(store.folderOrganization == .byRating ? "Organize by star rating" : "Organize by tag")
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    // Root folder
+                    HStack(spacing: 4) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(settings.accent)
+                        Text("RushCut/")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    // Subfolders (rating or tag based)
+                    ForEach(tree) { folder in
+                        ExportTreeFolderRow(folder: folder) { filename in
+                            store.openClip(byFilename: filename)
+                        }
+                        .padding(.leading, 14)
+                    }
+                    
+                    // Metadata files
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                        Text("rushcut.json")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.leading, 14)
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                        Text("rushcut.csv")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.leading, 14)
+                }
+                
+                // Summary
+                if store.exportSkippedCount > 0 {
+                    Text("\(store.exportSkippedCount) untouched clip\(store.exportSkippedCount == 1 ? "" : "s") will be skipped")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+            
+        // MARK: Commit CTA (pinned to bottom)
+        Divider()
+            
+        Button(action: { showCommit = true }) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 16))
+                Text("Commit")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .foregroundColor(.white)
+            .background(
+                LinearGradient(
+                    colors: [settings.accent, settings.accent.opacity(0.85)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .cornerRadius(10)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         }
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
@@ -417,8 +470,8 @@ struct ContentView: View {
     
     private var dropZone: some View {
         ZStack {
-            // Clean white background
-            Color.white
+            // Adaptive background
+            Color(nsColor: .windowBackgroundColor)
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -432,7 +485,7 @@ struct ContentView: View {
                         Circle()
                             .fill(
                                 RadialGradient(
-                                    colors: [Color.orange.opacity(0.15), Color.clear],
+                                    colors: [settings.accent.opacity(0.15), Color.clear],
                                     center: .center,
                                     startRadius: 20,
                                     endRadius: 80
@@ -442,49 +495,19 @@ struct ContentView: View {
                             .scaleEffect(heroAnimating ? 1.1 : 0.95)
                             .animation(.easeInOut(duration: 3).repeatForever(autoreverses: true), value: heroAnimating)
                         
-                        // Film strip icons floating around
-                        Image(systemName: "film")
-                            .font(.system(size: 20))
-                            .foregroundColor(.orange.opacity(0.3))
-                            .offset(x: -45, y: -30)
-                            .rotationEffect(.degrees(heroAnimating ? -8 : 8))
-                            .animation(.easeInOut(duration: 4).repeatForever(autoreverses: true), value: heroAnimating)
-                        
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.yellow.opacity(0.4))
-                            .offset(x: 50, y: -25)
-                            .rotationEffect(.degrees(heroAnimating ? 10 : -5))
-                            .animation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true), value: heroAnimating)
-                        
-                        Image(systemName: "tag.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.orange.opacity(0.3))
-                            .offset(x: 45, y: 30)
-                            .rotationEffect(.degrees(heroAnimating ? -5 : 10))
-                            .animation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true), value: heroAnimating)
-                        
                         // Main icon
-                        Image(systemName: "basketball.fill")
-                            .font(.system(size: 56))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.orange, .orange.opacity(0.7)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                        RushCutLogo(size: 56)
                             .scaleEffect(isDragTargeted ? 1.15 : 1.0)
                             .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isDragTargeted)
                     }
                     
                     // Headlines
                     VStack(spacing: 10) {
-                        Text("Triage your game footage")
+                        Text("Stop drowning in footage")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.primary)
                         
-                        Text("Rate, tag, and organize clips — all from one place")
+                        Text("Scrub, rate, tag, and organize. Manually, or audio-based.")
                             .font(.system(size: 16))
                             .foregroundColor(.secondary)
                     }
@@ -504,13 +527,13 @@ struct ContentView: View {
                             .padding(.vertical, 14)
                             .background(
                                 LinearGradient(
-                                    colors: [.orange, .orange.opacity(0.85)],
+                                    colors: [settings.accent, settings.accent.opacity(0.85)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
                             .cornerRadius(12)
-                            .shadow(color: .orange.opacity(0.3), radius: 8, y: 4)
+                            .shadow(color: settings.accent.opacity(0.3), radius: 8, y: 4)
                         }
                         .buttonStyle(.plain)
                         
@@ -533,13 +556,13 @@ struct ContentView: View {
                         VStack(spacing: 8) {
                             Image(systemName: isDragTargeted ? "arrow.down.circle.fill" : "arrow.down.circle.dotted")
                                 .font(.system(size: 28))
-                                .foregroundColor(isDragTargeted ? .orange : .secondary.opacity(0.4))
+                                .foregroundColor(isDragTargeted ? settings.accent : .secondary.opacity(0.4))
                                 .scaleEffect(isDragTargeted ? 1.2 : 1.0)
                                 .animation(.spring(response: 0.3), value: isDragTargeted)
                             
                             Text("Drop folders or video files here")
                                 .font(.system(size: 13))
-                                .foregroundColor(isDragTargeted ? .orange : .secondary.opacity(0.6))
+                                .foregroundColor(isDragTargeted ? settings.accent : .secondary.opacity(0.6))
                         }
                         .padding(.vertical, 20)
                         .padding(.horizontal, 40)
@@ -547,20 +570,20 @@ struct ContentView: View {
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .strokeBorder(
-                                    isDragTargeted ? Color.orange : Color.secondary.opacity(0.15),
+                                    isDragTargeted ? settings.accent : Color.secondary.opacity(0.15),
                                     style: StrokeStyle(lineWidth: isDragTargeted ? 2 : 1.5, dash: [8, 4])
                                 )
                                 .background(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(isDragTargeted ? Color.orange.opacity(0.05) : Color.clear)
+                                        .fill(isDragTargeted ? settings.accent.opacity(0.05) : Color.clear)
                                 )
                         )
                     }
                     .padding(32)
                     .background(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color.white)
-                            .shadow(color: .black.opacity(0.08), radius: 24, y: 8)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .shadow(color: .primary.opacity(0.08), radius: 24, y: 8)
                     )
                     .frame(maxWidth: 440)
                 }
@@ -572,7 +595,7 @@ struct ContentView: View {
                     featureItem(icon: "hand.draw", title: "Scrub & Preview", desc: "Hover to preview clips instantly")
                     featureItem(icon: "star", title: "Quick Rate", desc: "1-5 keyboard shortcuts")
                     featureItem(icon: "tag", title: "Multi-Tag", desc: "Organize by plays, drills & more")
-                    featureItem(icon: "square.and.arrow.up", title: "Export", desc: "Sorted folders by rating")
+                    featureItem(icon: "checkmark.circle", title: "Commit", desc: "Sorted folders by rating")
                 }
                 .padding(.bottom, 40)
             }
@@ -585,7 +608,7 @@ struct ContentView: View {
         VStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 20))
-                .foregroundColor(.orange.opacity(0.7))
+                .foregroundColor(settings.accent.opacity(0.7))
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.primary)
@@ -632,11 +655,12 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Export Tree Folder Row
+// MARK: - Folder Preview Tree Row
 
-/// A collapsible folder row in the export preview tree.
+/// A collapsible folder row in the folder preview tree.
 struct ExportTreeFolderRow: View {
     let folder: ClipStore.ExportFolder
+    var onOpenFile: ((String) -> Void)? = nil
     @State private var expanded = false
     
     /// Max files to show before collapsing with a "and N more..." label
@@ -669,18 +693,8 @@ struct ExportTreeFolderRow: View {
                 let filesToShow = folder.files.prefix(previewLimit)
                 let remaining = folder.files.count - filesToShow.count
                 
-                ForEach(Array(filesToShow.enumerated()), id: \.offset) { _, filename in
-                    HStack(spacing: 4) {
-                        Image(systemName: "film")
-                            .font(.system(size: 8))
-                            .foregroundColor(.secondary.opacity(0.6))
-                        Text(filename)
-                            .font(.system(size: 9.5, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .padding(.leading, 20)
+                ForEach(Array(filesToShow.enumerated()), id: \.offset) { _, entry in
+                    fileRow(entry)
                 }
                 
                 if remaining > 0 {
@@ -692,5 +706,45 @@ struct ExportTreeFolderRow: View {
                 }
             }
         }
+    }
+    
+    @ViewBuilder
+    private func fileRow(_ entry: ClipStore.ExportFileEntry) -> some View {
+        if let onOpenFile {
+            Button(action: { onOpenFile(entry.filename) }) {
+                fileRowContent(entry)
+            }
+            .buttonStyle(.plain)
+        } else {
+            fileRowContent(entry)
+        }
+    }
+    
+    private func fileRowContent(_ entry: ClipStore.ExportFileEntry) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "film")
+                .font(.system(size: 8))
+                .foregroundColor(.secondary.opacity(0.6))
+            Text(entry.filename)
+                .font(.system(size: 9.5, design: .monospaced))
+                .foregroundColor(onOpenFile != nil ? .primary : .secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if let annotation = entry.annotation {
+                Text("(\(annotation))")
+                    .font(.system(size: 8))
+                    .foregroundColor(.blue.opacity(0.7))
+                    .lineLimit(1)
+            }
+            if onOpenFile != nil {
+                Spacer()
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 7))
+                    .foregroundColor(.secondary.opacity(0.4))
+            }
+        }
+        .padding(.leading, 20)
+        .padding(.vertical, 1)
+        .contentShape(Rectangle())
     }
 }

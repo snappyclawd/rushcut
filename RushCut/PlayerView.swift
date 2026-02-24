@@ -47,12 +47,14 @@ struct TrackpadScrubOverlay: NSViewRepresentable {
 
 /// Expanded video player with JKL scrubbing and keyboard controls
 struct PlayerView: View {
+    @EnvironmentObject var settings: AppSettings
     let clip: Clip
     let onRate: (Int) -> Void
     let onToggleTag: (String) -> Void
     let onRemoveTag: (String) -> Void
     let availableTags: [String]
     let onAddTag: (String) -> Void
+    let onRename: (String) -> Void
     let onClose: () -> Void
     
     @State private var player: AVPlayer?
@@ -63,6 +65,8 @@ struct PlayerView: View {
     @State private var isScrubbing = false
     @State private var showTagPicker = false
     @State private var hoveredStar: Int = 0
+    @State private var isRenaming = false
+    @State private var renameText = ""
     @FocusState private var isFocused: Bool
     
     @State private var timeObserver: Any? = nil
@@ -162,9 +166,29 @@ struct PlayerView: View {
     private var headerBar: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(clip.filename)
-                    .font(.system(size: 15, weight: .bold))
-                    .lineLimit(1)
+                if isRenaming {
+                    RenameTextField(
+                        text: $renameText,
+                        font: .systemFont(ofSize: 15, weight: .bold),
+                        onCommit: {
+                            let trimmed = renameText.trimmingCharacters(in: .whitespaces)
+                            if !trimmed.isEmpty { onRename(trimmed) }
+                            isRenaming = false
+                        },
+                        onCancel: { isRenaming = false }
+                    )
+                    .frame(height: 24)
+                } else {
+                    Text(clip.filename)
+                        .font(.system(size: 15, weight: .bold))
+                        .lineLimit(1)
+                        .onTapGesture(count: 2) {
+                            let name = clip.filename
+                            let ext = (name as NSString).pathExtension
+                            renameText = !ext.isEmpty ? String(name.dropLast(ext.count + 1)) : name
+                            isRenaming = true
+                        }
+                }
                 
                 HStack(spacing: 14) {
                     metaItem(icon: "clock", value: clip.durationFormatted)
@@ -431,7 +455,7 @@ struct PlayerView: View {
         HStack(spacing: 2) {
             ForEach(1...5, id: \.self) { star in
                 Text("★")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundColor(playerStarColor(for: star))
                     .scaleEffect(hoveredStar == star ? 1.15 : 1.0)
                     .animation(.easeInOut(duration: 0.1), value: hoveredStar)
@@ -447,7 +471,7 @@ struct PlayerView: View {
     
     private func playerStarColor(for star: Int) -> Color {
         if hoveredStar > 0 {
-            return star <= hoveredStar ? .orange : Color.gray.opacity(0.25)
+            return star <= hoveredStar ? settings.accent : Color.gray.opacity(0.25)
         }
         return star <= clip.rating ? .yellow : Color.gray.opacity(0.25)
     }

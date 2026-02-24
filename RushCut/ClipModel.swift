@@ -5,25 +5,14 @@ import AVFoundation
 struct Clip: Identifiable, Hashable {
     let id: UUID
     let url: URL
-    let filename: String
+    var filename: String
     let duration: Double
     let width: Int
     let height: Int
     let fileSize: Int64
     
-    var rating: Int = 0              // 0 = unrated, 1-5 = confirmed (human)
-    var suggestedRating: Int = 0     // 0 = none, 1-5 = from audio analysis
-    var tags: Set<String> = []
-    
-    /// The rating to display/sort by — confirmed takes priority
-    var effectiveRating: Int {
-        rating > 0 ? rating : suggestedRating
-    }
-    
-    /// Whether this clip has an unconfirmed suggestion
-    var hasSuggestion: Bool {
-        suggestedRating > 0 && rating == 0
-    }
+    var rating: Int = 0              // 0 = unrated, 1-5 = user rating
+    var tags: [String] = []
     
     /// Create a clip by async-loading metadata from the file
     static func create(url: URL) async -> Clip {

@@ -22,6 +22,12 @@
 		AA00000D /* TagPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001D /* TagPickerView.swift */; };
 		AA00000E /* ScrubPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001E /* ScrubPlayerView.swift */; };
 		AA00000F /* AudioScrubEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00001F /* AudioScrubEngine.swift */; };
+		AA000020 /* RushCutLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000021 /* RushCutLogo.swift */; };
+		AA000022 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000023 /* AppSettings.swift */; };
+		AA000024 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000025 /* SettingsView.swift */; };
+		AA000026 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000027 /* KeychainHelper.swift */; };
+		AA000028 /* LicenseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000029 /* LicenseManager.swift */; };
+		AA00002A /* LicenseEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00002B /* LicenseEntryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +48,12 @@
 		AA00001D /* TagPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPickerView.swift; sourceTree = "<group>"; };
 		AA00001E /* ScrubPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrubPlayerView.swift; sourceTree = "<group>"; };
 		AA00001F /* AudioScrubEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioScrubEngine.swift; sourceTree = "<group>"; };
+		AA000021 /* RushCutLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RushCutLogo.swift; sourceTree = "<group>"; };
+		AA000023 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		AA000025 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AA000027 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		AA000029 /* LicenseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseManager.swift; sourceTree = "<group>"; };
+		AA00002B /* LicenseEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicenseEntryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,6 +92,12 @@
 				AA00001D /* TagPickerView.swift */,
 				AA00001E /* ScrubPlayerView.swift */,
 				AA00001F /* AudioScrubEngine.swift */,
+				AA000021 /* RushCutLogo.swift */,
+				AA000023 /* AppSettings.swift */,
+				AA000025 /* SettingsView.swift */,
+				AA000027 /* KeychainHelper.swift */,
+				AA000029 /* LicenseManager.swift */,
+				AA00002B /* LicenseEntryView.swift */,
 				AA000018 /* Assets.xcassets */,
 				AA000019 /* RushCut.entitlements */,
 			);
@@ -172,6 +190,12 @@
 				AA00000D /* TagPickerView.swift in Sources */,
 				AA00000E /* ScrubPlayerView.swift in Sources */,
 				AA00000F /* AudioScrubEngine.swift in Sources */,
+				AA000020 /* RushCutLogo.swift in Sources */,
+				AA000022 /* AppSettings.swift in Sources */,
+				AA000024 /* SettingsView.swift in Sources */,
+				AA000026 /* KeychainHelper.swift in Sources */,
+				AA000028 /* LicenseManager.swift in Sources */,
+				AA00002A /* LicenseEntryView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,5 +1,70 @@
 import SwiftUI
 import AVFoundation
+import AppKit
+
+// MARK: - Auto-Focus + Select-All TextField
+
+/// An NSTextField wrapper that immediately focuses and selects all text on appear.
+struct RenameTextField: NSViewRepresentable {
+    @Binding var text: String
+    var font: NSFont = .systemFont(ofSize: 13, weight: .semibold)
+    var onCommit: () -> Void
+    var onCancel: () -> Void
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.stringValue = text
+        field.font = font
+        field.isBezeled = true
+        field.bezelStyle = .roundedBezel
+        field.focusRingType = .exterior
+        field.delegate = context.coordinator
+        field.usesSingleLineMode = true
+        field.lineBreakMode = .byTruncatingTail
+        
+        // Focus and select all on next run loop so the field is in the window
+        DispatchQueue.main.async {
+            field.window?.makeFirstResponder(field)
+            field.currentEditor()?.selectAll(nil)
+        }
+        
+        return field
+    }
+    
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        // Only push text changes outward (coordinator handles inward)
+    }
+    
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        let parent: RenameTextField
+        
+        init(_ parent: RenameTextField) {
+            self.parent = parent
+        }
+        
+        func controlTextDidChange(_ obj: Notification) {
+            if let field = obj.object as? NSTextField {
+                parent.text = field.stringValue
+            }
+        }
+        
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                parent.onCommit()
+                return true
+            }
+            if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+                parent.onCancel()
+                return true
+            }
+            return false
+        }
+    }
+}
 
 /// A single clip card with hover-scrub, poster, rating, and tags.
 ///
@@ -7,6 +72,7 @@ import AVFoundation
 /// on hover-enter and released on hover-leave. The AVPlayerLayer renders
 /// decoded frames directly via GPU. Seeks are coalesced to avoid stutter.
 struct ClipThumbnailView: View {
+    @EnvironmentObject var settings: AppSettings
     let clip: Clip
     let isHovered: Bool
     @Binding var showTagPickerBinding: Bool
@@ -21,9 +87,11 @@ struct ClipThumbnailView: View {
     let onAddTag: (String) -> Void
     let onHoverChange: (Bool) -> Void
     let onRemove: () -> Void
-    let onAcceptSuggestion: () -> Void
-    let onDismissSuggestion: () -> Void
     let onOpen: () -> Void
+    let onRename: (String) -> Void
+    let onRenameStateChanged: (Bool) -> Void
+    let onSelect: (NSEvent.ModifierFlags) -> Void
+    let isSelected: Bool
     
     @State private var posterImage: NSImage? = nil
     @State private var isHovering = false
@@ -31,6 +99,8 @@ struct ClipThumbnailView: View {
     @State private var currentTime: Double = 0
     @State private var hoveredStar: Int = 0
     @State private var showTagPicker = false
+    @State private var isRenaming = false
+    @State private var renameText = ""
     
     @State private var isCardHovered = false
     // AVPlayer-based scrub — only created on hover-enter
@@ -65,7 +135,7 @@ struct ClipThumbnailView: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                     
                     // Rating badge (top-left)
-                    if clip.effectiveRating > 0 {
+                    if clip.rating > 0 {
                         VStack {
                             HStack {
                                 ratingBadge.padding(6)
@@ -80,6 +150,17 @@ struct ClipThumbnailView: View {
                         VStack {
                             HStack {
                                 Spacer()
+                                Button(action: onOpen) {
+                                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .frame(width: 26, height: 26)
+                                        .background(.black.opacity(0.4))
+                                        .clipShape(Circle())
+                                        .shadow(color: .black.opacity(0.5), radius: 2)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Expand (Enter)")
                                 Button(action: onRemove) {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.system(size: 18))
@@ -91,48 +172,6 @@ struct ClipThumbnailView: View {
                                 .padding(6)
                             }
                             Spacer()
-                        }
-                    }
-                    
-                    // Accept/Dismiss suggestion buttons
-                    if clip.hasSuggestion && isCardHovered {
-                        VStack {
-                            Spacer()
-                            HStack(spacing: 8) {
-                                Button(action: onAcceptSuggestion) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 11, weight: .bold))
-                                        Text("Accept")
-                                            .font(.system(size: 11, weight: .semibold))
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.green.opacity(0.85))
-                                    .cornerRadius(8)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Accept suggestion (A)")
-                                
-                                Button(action: onDismissSuggestion) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 11, weight: .bold))
-                                        Text("Dismiss")
-                                            .font(.system(size: 11, weight: .semibold))
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.red.opacity(0.7))
-                                    .cornerRadius(8)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Dismiss suggestion (X)")
-                            }
-                            .shadow(color: .black.opacity(0.4), radius: 3)
-                            .padding(.bottom, 10)
                         }
                     }
                     
@@ -218,7 +257,8 @@ struct ClipThumbnailView: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    onOpen()
+                    let flags = NSEvent.modifierFlags
+                    onSelect(flags)
                 }
             }
             .aspectRatio(16/9, contentMode: .fit)
@@ -226,11 +266,22 @@ struct ClipThumbnailView: View {
             // Info bar
             VStack(spacing: 6) {
                 HStack(spacing: 8) {
-                    Text(clip.filename)
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .foregroundColor(.primary)
+                    if isRenaming {
+                        RenameTextField(
+                            text: $renameText,
+                            font: .systemFont(ofSize: 13, weight: .semibold),
+                            onCommit: { commitRename() },
+                            onCancel: { cancelRename() }
+                        )
+                        .frame(height: 22)
+                    } else {
+                        Text(clip.filename)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .foregroundColor(.primary)
+                            .onTapGesture(count: 2) { startRename() }
+                    }
                     
                     Spacer()
                     
@@ -250,12 +301,19 @@ struct ClipThumbnailView: View {
             .background(Color(nsColor: .controlBackgroundColor))
             .contentShape(Rectangle())
             .onTapGesture {
-                onOpen()
+                let flags = NSEvent.modifierFlags
+                onSelect(flags)
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: cardRadius, style: .continuous))
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+        .overlay(
+            RoundedRectangle(cornerRadius: cardRadius + 4, style: .continuous)
+                .inset(by: -4)
+                .strokeBorder(isSelected ? settings.accent : Color.clear, lineWidth: 2)
+        )
+        .shadow(color: isSelected ? settings.accent.opacity(0.25) : .black.opacity(0.08), radius: isSelected ? 12 : 8, y: 3)
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
         .onHover { hovering in
             isCardHovered = hovering
             onHoverChange(hovering)
@@ -281,39 +339,29 @@ struct ClipThumbnailView: View {
     // MARK: - Rating Badge
     
     private var ratingBadge: some View {
-        let effectiveRating = clip.effectiveRating
-        let color = Self.scoreColors[effectiveRating] ?? .gray
-        let isSuggested = clip.hasSuggestion
+        let color = Self.scoreColors[clip.rating] ?? .gray
         
-        return HStack(spacing: 3) {
-            if isSuggested {
-                Image(systemName: "waveform")
-                    .font(.system(size: 10))
-            }
-            Text("\(effectiveRating)")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+        return HStack(spacing: 2) {
+            Text("\(clip.rating)")
+                .font(.system(size: 14, weight: .bold, design: .rounded))
             Text("★")
-                .font(.system(size: 15))
+                .font(.system(size: 10))
         }
-        .foregroundColor(isSuggested ? color : .white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(isSuggested ? color.opacity(0.2) : color)
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(isSuggested ? color : Color.clear, lineWidth: 1.5, antialiased: true)
-        )
-        .cornerRadius(10)
-        .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+        .foregroundColor(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color)
+        .cornerRadius(7)
+        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
     }
     
     // MARK: - Star Rating
     
     private var starRating: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 2) {
             ForEach(1...5, id: \.self) { star in
                 Text("★")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(starColor(for: star))
                     .scaleEffect(hoveredStar == star ? 1.2 : 1.0)
                     .animation(.easeInOut(duration: 0.1), value: hoveredStar)
@@ -330,13 +378,10 @@ struct ClipThumbnailView: View {
     
     private func starColor(for star: Int) -> Color {
         if hoveredStar > 0 {
-            return star <= hoveredStar ? .orange : Color.gray.opacity(0.25)
+            return star <= hoveredStar ? settings.accent : Color.gray.opacity(0.25)
         }
         if clip.rating > 0 {
             return star <= clip.rating ? .yellow : Color.gray.opacity(0.25)
-        }
-        if clip.suggestedRating > 0 {
-            return star <= clip.suggestedRating ? Color.blue.opacity(0.5) : Color.gray.opacity(0.25)
         }
         return Color.gray.opacity(0.25)
     }
@@ -383,5 +428,34 @@ struct ClipThumbnailView: View {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .red, .teal, .indigo, .mint, .cyan]
         let hash = abs(tag.hashValue)
         return colors[hash % colors.count]
+    }
+    
+    // MARK: - Inline Rename
+    
+    private func startRename() {
+        // Pre-fill with the filename stem (without extension)
+        let name = clip.filename
+        let ext = (name as NSString).pathExtension
+        if !ext.isEmpty {
+            renameText = String(name.dropLast(ext.count + 1))
+        } else {
+            renameText = name
+        }
+        isRenaming = true
+        onRenameStateChanged(true)
+    }
+    
+    private func commitRename() {
+        let trimmed = renameText.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty {
+            onRename(trimmed)
+        }
+        isRenaming = false
+        onRenameStateChanged(false)
+    }
+    
+    private func cancelRename() {
+        isRenaming = false
+        onRenameStateChanged(false)
     }
 }

@@ -76,11 +76,13 @@ struct ClipGridView: View {
                     onToggleTag: { tag in store.toggleTag(tag, for: clip.id) },
                     onRemoveTag: { tag in store.removeTag(tag, for: clip.id) },
                     availableTags: store.availableTags,
-                    onAddTag: { tag in store.addTag(tag) }
+                    onAddTag: { tag in store.addTag(tag) },
+                    onRename: { newName in store.renameClip(id: clip.id, newName: newName) }
                 ) {
                     expandedClip = nil
                     isGridFocused = true
                 }
+                .id(clip.id)
                 .frame(maxWidth: 1000, maxHeight: 720)
                 .padding(48)
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -94,66 +96,59 @@ struct ClipGridView: View {
                 isGridFocused = true
                 return .handled
             }
-            return .ignored
-        }
-        // 1-5 rates the hovered clip
-        .onKeyPress(characters: .init(charactersIn: "12345")) { press in
-            guard expandedClip == nil else { return .ignored }
-            if let digit = Int(String(press.characters)), (1...5).contains(digit),
-               let id = store.hoveredClipID {
-                store.setRating(digit, for: id)
+            if !store.selectedClipIDs.isEmpty {
+                store.selectedClipIDs.removeAll()
                 return .handled
             }
             return .ignored
         }
-        // T opens tag picker on hovered clip
+        // 1-5 rates the hovered or selected clips
+        .onKeyPress(characters: .init(charactersIn: "12345")) { press in
+            guard expandedClip == nil else { return .ignored }
+            guard let digit = Int(String(press.characters)), (1...5).contains(digit) else { return .ignored }
+            let targets = actionTargetIDs
+            guard !targets.isEmpty else { return .ignored }
+            for id in targets { store.setRating(digit, for: id) }
+            return .handled
+        }
+        // T opens tag picker on hovered clip (first selected if multi)
         .onKeyPress(characters: .init(charactersIn: "t")) { press in
             guard expandedClip == nil else { return .ignored }
-            if let id = store.hoveredClipID {
+            if let id = store.hoveredClipID ?? store.selectedClipIDs.first {
                 store.showTagPickerForClipID = id
                 return .handled
             }
             return .ignored
         }
-        // A accepts suggestion on hovered clip
-        .onKeyPress(characters: .init(charactersIn: "a")) { _ in
-            guard expandedClip == nil else { return .ignored }
-            if let id = store.hoveredClipID {
-                store.acceptSuggestion(for: id)
-                return .handled
-            }
-            return .ignored
-        }
-        // X dismisses suggestion on hovered clip
-        .onKeyPress(characters: .init(charactersIn: "x")) { _ in
-            guard expandedClip == nil else { return .ignored }
-            if let id = store.hoveredClipID {
-                store.dismissSuggestion(for: id)
-                return .handled
-            }
-            return .ignored
-        }
-        // Delete removes hovered clip
+        // Delete removes hovered or selected clips
         .onKeyPress(.delete) {
             guard expandedClip == nil else { return .ignored }
-            if let id = store.hoveredClipID {
-                store.removeClip(id: id)
-                return .handled
-            }
-            return .ignored
+            let targets = actionTargetIDs
+            guard !targets.isEmpty else { return .ignored }
+            for id in targets { store.removeClip(id: id) }
+            store.selectedClipIDs.removeAll()
+            return .handled
         }
         .onKeyPress(.deleteForward) {
             guard expandedClip == nil else { return .ignored }
-            if let id = store.hoveredClipID {
-                store.removeClip(id: id)
-                return .handled
-            }
-            return .ignored
+            let targets = actionTargetIDs
+            guard !targets.isEmpty else { return .ignored }
+            for id in targets { store.removeClip(id: id) }
+            store.selectedClipIDs.removeAll()
+            return .handled
         }
-        // Enter opens hovered clip
+        // Enter opens hovered or selected clip (but not while renaming)
         .onKeyPress(.return) {
             guard expandedClip == nil else { return .ignored }
+            guard store.renamingClipID == nil else { return .ignored }
+            // Prefer hovered clip, then fall back to single selected clip
             if let id = store.hoveredClipID,
+               let clip = store.sortedAndFilteredClips.first(where: { $0.id == id }) {
+                expandedClip = clip
+                return .handled
+            }
+            if store.selectedClipIDs.count == 1,
+               let id = store.selectedClipIDs.first,
                let clip = store.sortedAndFilteredClips.first(where: { $0.id == id }) {
                 expandedClip = clip
                 return .handled
@@ -162,6 +157,12 @@ struct ClipGridView: View {
         }
         .onAppear {
             isGridFocused = true
+        }
+        .onChange(of: store.clipToOpen?.id) { _, newID in
+            if let newID, let clip = store.clips.first(where: { $0.id == newID }) {
+                expandedClip = clip
+                store.clipToOpen = nil
+            }
         }
     }
     
@@ -224,7 +225,7 @@ struct ClipGridView: View {
         let color = scoreColors[title] ?? .secondary
         
         return Text(title)
-            .font(.system(size: 24, weight: .bold))
+            .font(.system(size: 18, weight: .bold))
             .foregroundColor(color)
     }
     
@@ -246,7 +247,7 @@ struct ClipGridView: View {
         case .rating:
             var groups: [Int: [Clip]] = [:]
             for clip in clips {
-                groups[clip.effectiveRating, default: []].append(clip)
+                groups[clip.rating, default: []].append(clip)
             }
             return (0...5).reversed().compactMap { rating in
                 guard let clipsInGroup = groups[rating], !clipsInGroup.isEmpty else { return nil }
@@ -291,13 +292,19 @@ struct ClipGridView: View {
             availableTags: store.availableTags,
             audioEnabled: audioEnabled,
             onRate: { rating in
-                store.setRating(rating, for: clip.id)
+                let targets = store.selectedClipIDs.contains(clip.id) && store.selectedClipIDs.count > 1
+                    ? store.selectedClipIDs : [clip.id]
+                for id in targets { store.setRating(rating, for: id) }
             },
             onToggleTag: { tag in
-                store.toggleTag(tag, for: clip.id)
+                let targets = store.selectedClipIDs.contains(clip.id) && store.selectedClipIDs.count > 1
+                    ? store.selectedClipIDs : [clip.id]
+                for id in targets { store.toggleTag(tag, for: id) }
             },
             onRemoveTag: { tag in
-                store.removeTag(tag, for: clip.id)
+                let targets = store.selectedClipIDs.contains(clip.id) && store.selectedClipIDs.count > 1
+                    ? store.selectedClipIDs : [clip.id]
+                for id in targets { store.removeTag(tag, for: id) }
             },
             onAddTag: { tag in
                 store.addTag(tag)
@@ -308,17 +315,57 @@ struct ClipGridView: View {
             onRemove: {
                 store.removeClip(id: clip.id)
             },
-            onAcceptSuggestion: {
-                store.acceptSuggestion(for: clip.id)
-            },
-            onDismissSuggestion: {
-                store.dismissSuggestion(for: clip.id)
-            },
             onOpen: {
                 expandedClip = clip
-            }
+            },
+            onRename: { newName in
+                store.renameClip(id: clip.id, newName: newName)
+            },
+            onRenameStateChanged: { isRenaming in
+                store.renamingClipID = isRenaming ? clip.id : nil
+            },
+            onSelect: { modifiers in
+                handleSelection(clip: clip, modifiers: modifiers)
+            },
+            isSelected: store.selectedClipIDs.contains(clip.id)
         )
         .id(clip.id)
+    }
+    
+    // MARK: - Selection
+    
+    /// IDs to target for keyboard-driven actions: selected clips if any, else hovered clip.
+    private var actionTargetIDs: Set<UUID> {
+        if !store.selectedClipIDs.isEmpty {
+            return store.selectedClipIDs
+        }
+        if let id = store.hoveredClipID {
+            return [id]
+        }
+        return []
+    }
+    
+    private func handleSelection(clip: Clip, modifiers: NSEvent.ModifierFlags) {
+        let clips = store.sortedAndFilteredClips
+        
+        if modifiers.contains(.shift), let lastID = store.selectedClipIDs.first,
+           let lastIndex = clips.firstIndex(where: { $0.id == lastID }),
+           let currentIndex = clips.firstIndex(where: { $0.id == clip.id }) {
+            // Shift+click: range select
+            let range = min(lastIndex, currentIndex)...max(lastIndex, currentIndex)
+            let rangeIDs = Set(clips[range].map(\.id))
+            store.selectedClipIDs = store.selectedClipIDs.union(rangeIDs)
+        } else if modifiers.contains(.command) {
+            // Cmd+click: toggle individual
+            if store.selectedClipIDs.contains(clip.id) {
+                store.selectedClipIDs.remove(clip.id)
+            } else {
+                store.selectedClipIDs.insert(clip.id)
+            }
+        } else {
+            // Plain click: single select
+            store.selectedClipIDs = [clip.id]
+        }
     }
 }
 

@@ -8,19 +8,14 @@ enum SortOrder: String, CaseIterable {
     case rating = "Rating"
 }
 
-/// Default basketball tags
-let defaultTags = [
-    "Action",
-    "Three",
-    "Dunk",
-    "Huddle",
-    "Warmup",
-    "Establishment",
-    "Interview",
-    "Celebration",
-    "Defense",
-    "Fast Break",
-]
+/// How to organize folders on commit
+enum FolderOrganization: String, CaseIterable {
+    case byTag = "By Tag"
+    case byRating = "By Rating"
+}
+
+/// Default basketball tags (alias for built-in defaults from AppSettings)
+let defaultTags = builtInDefaultTags
 
 // MARK: - Undo System
 
@@ -30,10 +25,9 @@ enum UndoAction: CustomStringConvertible {
     case toggleTag(clipID: UUID, tag: String, wasAdded: Bool)
     case removeClip(clip: Clip, index: Int)
     case addClips(clipIDs: [UUID])
-    case audioTriage(suggestions: [(UUID, Int)])              // bulk suggested ratings
-    case acceptSuggestion(clipID: UUID, suggestedRating: Int) // single accept
-    case acceptAllSuggestions(accepted: [(UUID, Int)])         // bulk accept
-    case dismissSuggestion(clipID: UUID, suggestedRating: Int)
+    case renameClip(clipID: UUID, oldName: String, newName: String)
+    /// Bulk tag application from audio triage — stores (clipID, tag) pairs
+    case audioTriageTags(applied: [(UUID, String)])
     
     var description: String {
         switch self {
@@ -45,14 +39,10 @@ enum UndoAction: CustomStringConvertible {
             return "Remove '\(clip.filename)'"
         case .addClips(let ids):
             return "Add \(ids.count) clip\(ids.count == 1 ? "" : "s")"
-        case .audioTriage(let suggestions):
-            return "Audio Triage (\(suggestions.count) clips)"
-        case .acceptSuggestion:
-            return "Accept Suggestion"
-        case .acceptAllSuggestions(let accepted):
-            return "Accept All (\(accepted.count) clips)"
-        case .dismissSuggestion:
-            return "Dismiss Suggestion"
+        case .renameClip(_, _, let newName):
+            return "Rename to '\(newName)'"
+        case .audioTriageTags(let applied):
+            return "Audio Triage (\(applied.count) clips)"
         }
     }
 }
@@ -66,11 +56,19 @@ class ClipStore: ObservableObject {
     @Published var sortOrder: SortOrder = .name
     @Published var filterRating: Int = 0 // 0 = show all
     @Published var filterTag: String? = nil
+    @Published var hideUntouched: Bool = false
     @Published var gridColumns: Int = 3
     @Published var groupMode: GroupMode = .none
     @Published var availableTags: [String] = defaultTags
     @Published var showTagPickerForClipID: UUID? = nil
     @Published var hoveredClipID: UUID? = nil
+    @Published var selectedClipIDs: Set<UUID> = []
+    @Published var clipToOpen: Clip? = nil
+    @Published var renamingClipID: UUID? = nil
+    @Published var folderOrganization: FolderOrganization = .byTag
+    
+    /// The most recently added source folder (used as default commit destination)
+    @Published var sourceFolderURL: URL? = nil
     
     // Undo/Redo stacks
     @Published var undoStack: [UndoAction] = []
@@ -93,8 +91,12 @@ class ClipStore: ObservableObject {
     var sortedAndFilteredClips: [Clip] {
         var result = clips
         
+        if hideUntouched {
+            result = result.filter { $0.rating > 0 || !$0.tags.isEmpty || $0.filename != $0.url.lastPathComponent }
+        }
+        
         if filterRating > 0 {
-            result = result.filter { $0.effectiveRating == filterRating }
+            result = result.filter { $0.rating == filterRating }
         }
         
         if let tag = filterTag {
@@ -107,7 +109,7 @@ class ClipStore: ObservableObject {
         case .duration:
             result.sort { $0.duration > $1.duration }
         case .rating:
-            result.sort { $0.effectiveRating > $1.effectiveRating }
+            result.sort { $0.rating > $1.rating }
         }
         
         return result
@@ -124,6 +126,7 @@ class ClipStore: ObservableObject {
     func addFolder(_ url: URL) {
         isLoading = true
         loadingProgress = 0
+        sourceFolderURL = url
         
         Task { [weak self] in
             guard let self = self else { return }
@@ -205,14 +208,15 @@ class ClipStore: ObservableObject {
         pushUndo(.setRating(clipID: clipID, oldRating: oldRating, newRating: newRating))
     }
     
-    /// Toggle a tag on a clip (add if missing, remove if present)
+    /// Toggle a tag on a clip (add if missing, remove if present).
+    /// Tags are ordered — first tag added is considered the "primary" tag for folder organization.
     func toggleTag(_ tag: String, for clipID: UUID) {
         guard let index = clips.firstIndex(where: { $0.id == clipID }) else { return }
         if clips[index].tags.contains(tag) {
-            clips[index].tags.remove(tag)
+            clips[index].tags.removeAll { $0 == tag }
             pushUndo(.toggleTag(clipID: clipID, tag: tag, wasAdded: false))
         } else {
-            clips[index].tags.insert(tag)
+            clips[index].tags.append(tag)
             pushUndo(.toggleTag(clipID: clipID, tag: tag, wasAdded: true))
         }
     }
@@ -221,7 +225,7 @@ class ClipStore: ObservableObject {
     func removeTag(_ tag: String, for clipID: UUID) {
         guard let index = clips.firstIndex(where: { $0.id == clipID }) else { return }
         if clips[index].tags.contains(tag) {
-            clips[index].tags.remove(tag)
+            clips[index].tags.removeAll { $0 == tag }
             pushUndo(.toggleTag(clipID: clipID, tag: tag, wasAdded: false))
         }
     }
@@ -232,80 +236,52 @@ class ClipStore: ObservableObject {
         }
     }
     
-    // MARK: - Audio Triage (Suggestions)
+    // MARK: - Rename (local state only — applied on disk at commit)
     
-    @Published var isAnalyzing = false
-    @Published var analysisProgress: Double = 0
-    
-    /// Number of clips with unconfirmed suggestions
-    var suggestedCount: Int {
-        clips.filter { $0.hasSuggestion }.count
+    func renameClip(id: UUID, newName: String) {
+        guard let index = clips.firstIndex(where: { $0.id == id }) else { return }
+        let oldName = clips[index].filename
+        guard newName != oldName, !newName.isEmpty else { return }
+        
+        // Preserve the original extension
+        let oldExt = (oldName as NSString).pathExtension
+        let newExt = (newName as NSString).pathExtension
+        let finalName: String
+        if newExt.isEmpty && !oldExt.isEmpty {
+            finalName = newName + "." + oldExt
+        } else {
+            finalName = newName
+        }
+        
+        clips[index].filename = finalName
+        pushUndo(.renameClip(clipID: id, oldName: oldName, newName: finalName))
     }
     
-    /// Run audio analysis on unrated clips and assign suggested ratings
-    func runAudioTriage() {
-        let unratedClips = clips.filter { $0.rating == 0 && $0.suggestedRating == 0 }
-        guard !unratedClips.isEmpty else { return }
-        
-        isAnalyzing = true
-        analysisProgress = 0
-        
-        Task {
-            let results = await AudioAnalyzer.analyzeAndRate(clips: unratedClips)
-            
-            // Apply suggestions
-            var applied: [(UUID, Int)] = []
-            for (id, rating) in results {
-                if let index = clips.firstIndex(where: { $0.id == id }) {
-                    clips[index].suggestedRating = rating
-                    applied.append((id, rating))
+    // MARK: - Audio Triage (Loudness Analysis)
+    
+    /// Cached audio analysis results keyed by clip ID
+    @Published var audioMetrics: [UUID: AudioMetrics] = [:]
+    
+    /// Apply loudness tags from audio triage results
+    func applyAudioTriageTags(tags: [(UUID, String)]) {
+        var applied: [(UUID, String)] = []
+        for (id, tag) in tags {
+            guard let index = clips.firstIndex(where: { $0.id == id }) else { continue }
+            if !clips[index].tags.contains(tag) {
+                clips[index].tags.append(tag)
+                applied.append((id, tag))
+            }
+        }
+        if !applied.isEmpty {
+            // Ensure tags are in available tags
+            let newTags = Set(applied.map { $0.1 })
+            for tag in newTags {
+                if !availableTags.contains(tag) {
+                    availableTags.append(tag)
                 }
             }
-            
-            isAnalyzing = false
-            analysisProgress = 1.0
-            
-            if !applied.isEmpty {
-                pushUndo(.audioTriage(suggestions: applied))
-            }
+            pushUndo(.audioTriageTags(applied: applied))
         }
-    }
-    
-    /// Accept a single suggestion — promotes to confirmed rating
-    func acceptSuggestion(for clipID: UUID) {
-        guard let index = clips.firstIndex(where: { $0.id == clipID }),
-              clips[index].hasSuggestion else { return }
-        
-        let suggested = clips[index].suggestedRating
-        clips[index].rating = suggested
-        clips[index].suggestedRating = 0
-        pushUndo(.acceptSuggestion(clipID: clipID, suggestedRating: suggested))
-    }
-    
-    /// Accept all pending suggestions
-    func acceptAllSuggestions() {
-        var accepted: [(UUID, Int)] = []
-        for index in clips.indices {
-            if clips[index].hasSuggestion {
-                let suggested = clips[index].suggestedRating
-                accepted.append((clips[index].id, suggested))
-                clips[index].rating = suggested
-                clips[index].suggestedRating = 0
-            }
-        }
-        if !accepted.isEmpty {
-            pushUndo(.acceptAllSuggestions(accepted: accepted))
-        }
-    }
-    
-    /// Dismiss a single suggestion
-    func dismissSuggestion(for clipID: UUID) {
-        guard let index = clips.firstIndex(where: { $0.id == clipID }),
-              clips[index].suggestedRating > 0 else { return }
-        
-        let suggested = clips[index].suggestedRating
-        clips[index].suggestedRating = 0
-        pushUndo(.dismissSuggestion(clipID: clipID, suggestedRating: suggested))
     }
     
     // MARK: - Undo / Redo
@@ -335,11 +311,9 @@ class ClipStore: ObservableObject {
         case .toggleTag(let clipID, let tag, let wasAdded):
             if let index = clips.firstIndex(where: { $0.id == clipID }) {
                 if wasAdded {
-                    // It was added, so undo = remove
-                    clips[index].tags.remove(tag)
+                    clips[index].tags.removeAll { $0 == tag }
                 } else {
-                    // It was removed, so undo = add back
-                    clips[index].tags.insert(tag)
+                    clips[index].tags.append(tag)
                 }
             }
             
@@ -356,34 +330,17 @@ class ClipStore: ObservableObject {
                 loadedURLs.remove(clip.url)
             }
             
-        case .audioTriage(let suggestions):
-            // Undo = clear all suggestions
-            for (id, _) in suggestions {
-                if let index = clips.firstIndex(where: { $0.id == id }) {
-                    clips[index].suggestedRating = 0
-                }
-            }
-            
-        case .acceptSuggestion(let clipID, let suggestedRating):
-            // Undo = move rating back to suggestion
+        case .renameClip(let clipID, let oldName, _):
             if let index = clips.firstIndex(where: { $0.id == clipID }) {
-                clips[index].rating = 0
-                clips[index].suggestedRating = suggestedRating
+                clips[index].filename = oldName
             }
             
-        case .acceptAllSuggestions(let accepted):
-            // Undo = move all ratings back to suggestions
-            for (id, suggestedRating) in accepted {
+        case .audioTriageTags(let applied):
+            // Undo = remove all the tags that were added
+            for (id, tag) in applied {
                 if let index = clips.firstIndex(where: { $0.id == id }) {
-                    clips[index].rating = 0
-                    clips[index].suggestedRating = suggestedRating
+                    clips[index].tags.removeAll { $0 == tag }
                 }
-            }
-            
-        case .dismissSuggestion(let clipID, let suggestedRating):
-            // Undo = restore suggestion
-            if let index = clips.firstIndex(where: { $0.id == clipID }) {
-                clips[index].suggestedRating = suggestedRating
             }
         }
         
@@ -402,9 +359,9 @@ class ClipStore: ObservableObject {
         case .toggleTag(let clipID, let tag, let wasAdded):
             if let index = clips.firstIndex(where: { $0.id == clipID }) {
                 if wasAdded {
-                    clips[index].tags.insert(tag)
+                    clips[index].tags.append(tag)
                 } else {
-                    clips[index].tags.remove(tag)
+                    clips[index].tags.removeAll { $0 == tag }
                 }
             }
             
@@ -415,30 +372,17 @@ class ClipStore: ObservableObject {
         case .addClips:
             break
             
-        case .audioTriage(let suggestions):
-            for (id, rating) in suggestions {
-                if let index = clips.firstIndex(where: { $0.id == id }) {
-                    clips[index].suggestedRating = rating
-                }
-            }
-            
-        case .acceptSuggestion(let clipID, let suggestedRating):
+        case .renameClip(let clipID, _, let newName):
             if let index = clips.firstIndex(where: { $0.id == clipID }) {
-                clips[index].rating = suggestedRating
-                clips[index].suggestedRating = 0
+                clips[index].filename = newName
             }
             
-        case .acceptAllSuggestions(let accepted):
-            for (id, rating) in accepted {
+        case .audioTriageTags(let applied):
+            // Redo = re-add all the tags
+            for (id, tag) in applied {
                 if let index = clips.firstIndex(where: { $0.id == id }) {
-                    clips[index].rating = rating
-                    clips[index].suggestedRating = 0
+                    clips[index].tags.append(tag)
                 }
-            }
-            
-        case .dismissSuggestion(let clipID, _):
-            if let index = clips.firstIndex(where: { $0.id == clipID }) {
-                clips[index].suggestedRating = 0
             }
         }
         
@@ -474,13 +418,32 @@ class ClipStore: ObservableObject {
     
     var totalClips: Int { clips.count }
     var ratedClips: Int { clips.filter { $0.rating > 0 }.count }
-    var suggestedClipsCount: Int { clips.filter { $0.hasSuggestion }.count }
+    /// Whether audio analysis has been run
+    var hasAudioMetrics: Bool { !audioMetrics.isEmpty }
     var taggedClips: Int { clips.filter { !$0.tags.isEmpty }.count }
     var totalDuration: Double { clips.reduce(0) { $0 + $1.duration } }
     
+    /// Duration of clips that have been rated or tagged (the "shortlist")
+    var shortlistedDuration: Double {
+        clips.filter { $0.rating > 0 || !$0.tags.isEmpty }.reduce(0) { $0 + $1.duration }
+    }
+    
+    /// Whether any clips have been triaged (rated or tagged)
+    var hasShortlistedClips: Bool {
+        clips.contains { $0.rating > 0 || !$0.tags.isEmpty }
+    }
+    
     var totalDurationFormatted: String {
-        let mins = Int(totalDuration) / 60
-        let secs = Int(totalDuration) % 60
+        formatDuration(totalDuration)
+    }
+    
+    var shortlistedDurationFormatted: String {
+        formatDuration(shortlistedDuration)
+    }
+    
+    private func formatDuration(_ duration: Double) -> String {
+        let mins = Int(duration) / 60
+        let secs = Int(duration) % 60
         if mins > 60 {
             let hrs = mins / 60
             let remainingMins = mins % 60
@@ -489,41 +452,72 @@ class ClipStore: ObservableObject {
         return "\(mins)m \(secs)s"
     }
     
-    // MARK: - Export Preview Tree
+    // MARK: - Folder Preview Tree
     
-    /// A folder in the export preview tree
-    struct ExportFolder: Identifiable {
-        let id = UUID()
-        let name: String
-        let files: [String]
+    /// A single file entry in the folder preview tree
+    struct ExportFileEntry: Identifiable {
+        var id: String { filename }
+        let filename: String
+        /// Optional annotation for multi-tag clips, e.g. "also: Defense, Action"
+        let annotation: String?
+        
+        init(_ filename: String, annotation: String? = nil) {
+            self.filename = filename
+            self.annotation = annotation
+        }
     }
     
-    /// Live preview of the export folder structure.
-    /// Returns nil when there's nothing to export (no clips with rating or tags).
+    /// A folder in the folder preview tree
+    struct ExportFolder: Identifiable {
+        var id: String { name }
+        let name: String
+        let files: [ExportFileEntry]
+    }
+    
+    private let ratingFolderNames: [Int: String] = [
+        5: "5-star",
+        4: "4-star",
+        3: "3-star",
+        2: "2-star",
+        1: "1-star",
+        0: "Unrated",
+    ]
+    
+    /// Live preview of the commit folder structure.
+    /// Returns nil when there's nothing to commit (no clips with rating or tags).
     var exportPreviewTree: [ExportFolder]? {
-        let ratingFolderNames: [Int: String] = [
-            5: "5-star",
-            4: "4-star",
-            3: "3-star",
-            2: "2-star",
-            1: "1-star",
-            0: "Unrated",
-        ]
-        
-        // Only show clips that would be exported (have rating or tags)
-        let exportable = clips.filter { $0.effectiveRating > 0 || !$0.tags.isEmpty }
+        exportPreviewTree(includeUntouched: false)
+    }
+    
+    /// Build export preview tree with option to include untouched clips.
+    /// Respects the current `folderOrganization` mode.
+    func exportPreviewTree(includeUntouched: Bool) -> [ExportFolder]? {
+        let exportable: [Clip]
+        if includeUntouched {
+            exportable = clips
+        } else {
+            exportable = clips.filter { $0.rating > 0 || !$0.tags.isEmpty }
+        }
         guard !exportable.isEmpty else { return nil }
         
-        // Group by effective rating, sorted highest first
-        var grouped: [Int: [String]] = [:]
+        switch folderOrganization {
+        case .byRating:
+            return buildRatingPreviewTree(from: exportable)
+        case .byTag:
+            return buildTagPreviewTree(from: exportable)
+        }
+    }
+    
+    /// Build preview tree grouped by star rating (original behavior)
+    private func buildRatingPreviewTree(from exportable: [Clip]) -> [ExportFolder] {
+        var grouped: [Int: [ExportFileEntry]] = [:]
         for clip in exportable {
-            let rating = clip.effectiveRating
-            grouped[rating, default: []].append(clip.filename)
+            grouped[clip.rating, default: []].append(ExportFileEntry(clip.filename))
         }
         
         // Sort filenames within each group
         for key in grouped.keys {
-            grouped[key]?.sort { $0.localizedStandardCompare($1) == .orderedAscending }
+            grouped[key]?.sort { $0.filename.localizedStandardCompare($1.filename) == .orderedAscending }
         }
         
         // Build folders in descending rating order
@@ -537,18 +531,153 @@ class ClipStore: ObservableObject {
         return folders
     }
     
-    /// Count of clips that would be skipped (untouched) on export
-    var exportSkippedCount: Int {
-        clips.filter { $0.effectiveRating == 0 && $0.tags.isEmpty }.count
+    /// Build preview tree grouped by first-applied tag.
+    /// Tagged clips go into their first tag's folder.
+    /// Untagged-but-rated clips fall back to star rating folders.
+    private func buildTagPreviewTree(from exportable: [Clip]) -> [ExportFolder] {
+        // Separate tagged from untagged
+        let tagged = exportable.filter { !$0.tags.isEmpty }
+        let untagged = exportable.filter { $0.tags.isEmpty }
+        
+        // Group tagged clips by their first (primary) tag
+        var tagGroups: [String: [ExportFileEntry]] = [:]
+        var tagOrder: [String] = [] // preserve first-seen order
+        for clip in tagged {
+            let primaryTag = clip.tags.first!
+            let otherTags = Array(clip.tags.dropFirst())
+            let annotation = otherTags.isEmpty ? nil : "also: \(otherTags.joined(separator: ", "))"
+            
+            if tagGroups[primaryTag] == nil {
+                tagOrder.append(primaryTag)
+            }
+            tagGroups[primaryTag, default: []].append(ExportFileEntry(clip.filename, annotation: annotation))
+        }
+        
+        // Sort filenames within each tag group
+        for key in tagGroups.keys {
+            tagGroups[key]?.sort { $0.filename.localizedStandardCompare($1.filename) == .orderedAscending }
+        }
+        
+        // Build tag folders in first-seen order
+        var folders: [ExportFolder] = []
+        for tag in tagOrder {
+            guard let files = tagGroups[tag], !files.isEmpty else { continue }
+            folders.append(ExportFolder(name: tag, files: files))
+        }
+        
+        // Build rating fallback folders for untagged clips
+        if !untagged.isEmpty {
+            var ratingGroups: [Int: [ExportFileEntry]] = [:]
+            for clip in untagged {
+                ratingGroups[clip.rating, default: []].append(ExportFileEntry(clip.filename))
+            }
+            for key in ratingGroups.keys {
+                ratingGroups[key]?.sort { $0.filename.localizedStandardCompare($1.filename) == .orderedAscending }
+            }
+            for rating in stride(from: 5, through: 0, by: -1) {
+                guard let files = ratingGroups[rating], !files.isEmpty else { continue }
+                let name = ratingFolderNames[rating] ?? "Unrated"
+                folders.append(ExportFolder(name: name, files: files))
+            }
+        }
+        
+        return folders
     }
     
-    // MARK: - Export
+    /// Count of clips that would be skipped (untouched) on commit
+    var exportSkippedCount: Int {
+        clips.filter { $0.rating == 0 && $0.tags.isEmpty }.count
+    }
     
-    /// Export clips to a destination folder, organized by rating
+    /// Open a clip in the player modal by filename
+    func openClip(byFilename filename: String) {
+        if let clip = clips.first(where: { $0.filename == filename }) {
+            clipToOpen = clip
+        }
+    }
+    
+    // MARK: - Commit
+    
+    /// Determine the destination folder name for a clip based on the current organization mode.
+    /// For byTag: tagged clips go into their first tag's folder, untagged fall back to rating.
+    /// For byRating: always use the rating folder.
+    private func folderName(for clip: Clip) -> String {
+        switch folderOrganization {
+        case .byRating:
+            return ratingFolderNames[clip.rating] ?? "Unrated"
+        case .byTag:
+            if let primaryTag = clip.tags.first {
+                return primaryTag
+            }
+            // Untagged clips fall back to star rating folders
+            return ratingFolderNames[clip.rating] ?? "Unrated"
+        }
+    }
+    
+    // MARK: - Manifest Helpers
+    
+    /// A planned file move entry in the manifest.
+    private struct ManifestEntry {
+        let originalPath: String
+        let destinationPath: String
+        let folder: String
+        let expectedSize: Int64
+        var status: String // "pending", "moved", "verified", "failed"
+        var error: String?
+    }
+    
+    /// Write the manifest JSON to disk. Called before, during, and after the move loop.
+    private func writeManifest(
+        to url: URL,
+        status: String,
+        startedAt: String,
+        entries: [ManifestEntry]
+    ) {
+        let entriesData: [[String: Any]] = entries.map { entry in
+            var dict: [String: Any] = [
+                "from": entry.originalPath,
+                "to": entry.destinationPath,
+                "folder": entry.folder,
+                "expectedSize": entry.expectedSize,
+                "status": entry.status,
+            ]
+            if let error = entry.error {
+                dict["error"] = error
+            }
+            return dict
+        }
+        
+        let manifest: [String: Any] = [
+            "status": status,
+            "startedAt": startedAt,
+            "organization": folderOrganization.rawValue,
+            "totalPlanned": entries.count,
+            "moved": entries.filter { $0.status == "moved" || $0.status == "verified" }.count,
+            "verified": entries.filter { $0.status == "verified" }.count,
+            "failed": entries.filter { $0.status == "failed" }.count,
+            "pending": entries.filter { $0.status == "pending" }.count,
+            "files": entriesData,
+        ]
+        
+        if let data = try? JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url)
+        }
+    }
+    
+    /// Commit clips to a destination folder, organized by rating or tag.
+    ///
+    /// Safety guarantees:
+    /// 1. A `rushcut-manifest.json` is written BEFORE any files are moved, recording every planned operation.
+    /// 2. The manifest is updated after each file move with its current status.
+    /// 3. After each move, the destination file is verified (exists + size matches).
+    /// 4. If verification fails, the error is recorded and the clip is not removed from the store.
+    /// 5. Final metadata (rushcut.json, rushcut.csv) is written only for successfully verified files.
     func exportClips(to baseURL: URL, skipUntouched: Bool) async -> ExportResult {
         let fm = FileManager.default
+        let isoFormatter = ISO8601DateFormatter()
+        let startedAt = isoFormatter.string(from: Date())
         
-        // Create the RushCut export folder
+        // Create the RushCut folder
         let exportFolder = baseURL.appendingPathComponent("RushCut")
         
         // If it already exists, make a unique name
@@ -570,80 +699,143 @@ class ClipStore: ObservableObject {
         let skippedCount: Int
         
         if skipUntouched {
-            clipsToExport = clips.filter { $0.effectiveRating > 0 || !$0.tags.isEmpty }
+            clipsToExport = clips.filter { $0.rating > 0 || !$0.tags.isEmpty }
             skippedCount = clips.count - clipsToExport.count
         } else {
             clipsToExport = clips
             skippedCount = 0
         }
         
-        // Rating folder names
-        let ratingFolderNames: [Int: String] = [
-            5: "5-star",
-            4: "4-star",
-            3: "3-star",
-            2: "2-star",
-            1: "1-star",
-            0: "Unrated",
-        ]
-        
-        // Create rating subfolders as needed
-        var neededRatings = Set(clipsToExport.map { $0.rating })
-        for rating in neededRatings {
-            let folderName = ratingFolderNames[rating] ?? "Unrated"
-            let folderURL = finalFolder.appendingPathComponent(folderName)
+        // Determine needed subfolders and create them
+        let neededFolders = Set(clipsToExport.map { folderName(for: $0) })
+        for folder in neededFolders {
+            let folderURL = finalFolder.appendingPathComponent(folder)
             try? fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
         }
         
-        // Move files
-        var movedCount = 0
-        var errors: [String] = []
-        var exportedClipData: [[String: Any]] = []
+        // --- SAFETY: Build manifest with all planned moves ---
+        let manifestURL = finalFolder.appendingPathComponent("rushcut-manifest.json")
+        
+        // Pre-compute destination paths (with collision handling) for the manifest
+        var manifestEntries: [ManifestEntry] = []
+        var usedDestPaths: Set<String> = []
         
         for clip in clipsToExport {
-            let folderName = ratingFolderNames[clip.effectiveRating] ?? "Unrated"
-            let destFolder = finalFolder.appendingPathComponent(folderName)
+            let destFolderName = folderName(for: clip)
+            let destFolder = finalFolder.appendingPathComponent(destFolderName)
             var destFile = destFolder.appendingPathComponent(clip.filename)
             
-            // Handle filename collisions
-            if fm.fileExists(atPath: destFile.path) {
+            // Handle filename collisions (both existing files AND earlier entries in this batch)
+            if fm.fileExists(atPath: destFile.path) || usedDestPaths.contains(destFile.path) {
                 let stem = destFile.deletingPathExtension().lastPathComponent
                 let ext = destFile.pathExtension
                 var n = 1
                 repeat {
                     destFile = destFolder.appendingPathComponent("\(stem)_\(n).\(ext)")
                     n += 1
-                } while fm.fileExists(atPath: destFile.path)
+                } while fm.fileExists(atPath: destFile.path) || usedDestPaths.contains(destFile.path)
             }
             
+            usedDestPaths.insert(destFile.path)
+            
+            manifestEntries.append(ManifestEntry(
+                originalPath: clip.url.path,
+                destinationPath: destFile.path,
+                folder: destFolderName,
+                expectedSize: clip.fileSize,
+                status: "pending"
+            ))
+        }
+        
+        // Write the initial manifest BEFORE moving anything
+        writeManifest(to: manifestURL, status: "in_progress", startedAt: startedAt, entries: manifestEntries)
+        
+        // --- Move files with verification ---
+        var movedCount = 0
+        var errors: [String] = []
+        var exportedClipData: [[String: Any]] = []
+        var successfullyMovedClipIDs: Set<UUID> = []
+        
+        for (i, clip) in clipsToExport.enumerated() {
+            let entry = manifestEntries[i]
+            let destFile = URL(fileURLWithPath: entry.destinationPath)
+            let destFolderName = entry.folder
+            
             do {
+                // Move the file
                 try fm.moveItem(at: clip.url, to: destFile)
-                movedCount += 1
                 
-                // Build metadata entry
-                var entry: [String: Any] = [
+                // --- SAFETY: Verify the move ---
+                // Check destination exists
+                guard fm.fileExists(atPath: destFile.path) else {
+                    manifestEntries[i].status = "failed"
+                    manifestEntries[i].error = "File not found at destination after move"
+                    errors.append("\(clip.filename): File not found at destination after move")
+                    writeManifest(to: manifestURL, status: "in_progress", startedAt: startedAt, entries: manifestEntries)
+                    continue
+                }
+                
+                // Check file size matches (if we have the expected size)
+                if clip.fileSize > 0 {
+                    if let attrs = try? fm.attributesOfItem(atPath: destFile.path),
+                       let actualSize = attrs[FileAttributeKey.size] as? Int64 {
+                        if actualSize != clip.fileSize {
+                            manifestEntries[i].status = "failed"
+                            manifestEntries[i].error = "Size mismatch: expected \(clip.fileSize), got \(actualSize)"
+                            errors.append("\(clip.filename): Size mismatch after move (expected \(clip.fileSize), got \(actualSize))")
+                            writeManifest(to: manifestURL, status: "in_progress", startedAt: startedAt, entries: manifestEntries)
+                            continue
+                        }
+                    }
+                }
+                
+                // Verification passed
+                manifestEntries[i].status = "verified"
+                movedCount += 1
+                successfullyMovedClipIDs.insert(clip.id)
+                
+                // Build metadata entry (only for verified moves)
+                var metaEntry: [String: Any] = [
                     "filename": destFile.lastPathComponent,
-                    "rating": clip.effectiveRating,
-                    "tags": Array(clip.tags).sorted(),
+                    "rating": clip.rating,
+                    "tags": clip.tags.sorted(),
                     "duration": round(clip.duration * 10) / 10,
                     "originalPath": clip.url.path,
-                    "ratingFolder": folderName,
+                    "folder": destFolderName,
+                    "ratingFolder": ratingFolderNames[clip.rating] ?? "Unrated",
+                    "organization": folderOrganization.rawValue,
                 ]
+                if folderOrganization == .byTag && !clip.tags.isEmpty {
+                    metaEntry["primaryTag"] = clip.tags.first
+                    metaEntry["tagFolder"] = destFolderName
+                }
                 if clip.width > 0 && clip.height > 0 {
-                    entry["resolution"] = "\(clip.width)x\(clip.height)"
+                    metaEntry["resolution"] = "\(clip.width)x\(clip.height)"
                 }
                 if clip.fileSize > 0 {
-                    entry["fileSize"] = clip.fileSize
+                    metaEntry["fileSize"] = clip.fileSize
                 }
-                exportedClipData.append(entry)
+                exportedClipData.append(metaEntry)
+                
             } catch {
+                manifestEntries[i].status = "failed"
+                manifestEntries[i].error = error.localizedDescription
                 errors.append("\(clip.filename): \(error.localizedDescription)")
             }
+            
+            // Update manifest after each file (so it's always current if the app crashes)
+            writeManifest(to: manifestURL, status: "in_progress", startedAt: startedAt, entries: manifestEntries)
         }
+        
+        // --- Finalize manifest ---
+        let finalStatus = errors.isEmpty ? "complete" : "complete_with_errors"
+        writeManifest(to: manifestURL, status: finalStatus, startedAt: startedAt, entries: manifestEntries)
+        
+        // --- Write final metadata (only includes verified files) ---
         
         // Generate tag summary
         var tagSummary: [String: Int] = [:]
-        for clip in clipsToExport {
+        for clip in clipsToExport where successfullyMovedClipIDs.contains(clip.id) {
             for tag in clip.tags {
                 tagSummary[tag, default: 0] += 1
             }
@@ -651,18 +843,18 @@ class ClipStore: ObservableObject {
         
         // Generate rating summary
         var ratingSummary: [String: Int] = [:]
-        for clip in clipsToExport {
-            let key = ratingFolderNames[clip.effectiveRating] ?? "Unrated"
+        for clip in clipsToExport where successfullyMovedClipIDs.contains(clip.id) {
+            let key = ratingFolderNames[clip.rating] ?? "Unrated"
             ratingSummary[key, default: 0] += 1
         }
         
         // Write JSON metadata
-        let isoFormatter = ISO8601DateFormatter()
         let metadata: [String: Any] = [
-            "exportDate": isoFormatter.string(from: Date()),
+            "exportDate": startedAt,
             "appVersion": "1.0",
-            "totalClips": clipsToExport.count,
+            "totalClips": movedCount,
             "skippedUntouched": skippedCount,
+            "organization": folderOrganization.rawValue,
             "ratingSummary": ratingSummary,
             "tagSummary": tagSummary,
             "clips": exportedClipData,
@@ -674,30 +866,30 @@ class ClipStore: ObservableObject {
         }
         
         // Write CSV
-        var csv = "Filename,Rating,Tags,Duration,Resolution,Rating Folder,Original Path\n"
+        var csv = "Filename,Rating,Tags,Duration,Resolution,Folder,Rating Folder,Original Path\n"
         for entry in exportedClipData {
             let filename = entry["filename"] as? String ?? ""
             let rating = entry["rating"] as? Int ?? 0
             let tags = (entry["tags"] as? [String])?.joined(separator: "; ") ?? ""
             let duration = entry["duration"] as? Double ?? 0
             let resolution = entry["resolution"] as? String ?? ""
-            let folder = entry["ratingFolder"] as? String ?? ""
+            let folder = entry["folder"] as? String ?? ""
+            let ratingFolder = entry["ratingFolder"] as? String ?? ""
             let originalPath = entry["originalPath"] as? String ?? ""
             
             // CSV escape: wrap in quotes if contains comma/quote/newline
             let escapedTags = "\"\(tags.replacingOccurrences(of: "\"", with: "\"\""))\""
             let escapedPath = "\"\(originalPath.replacingOccurrences(of: "\"", with: "\"\""))\""
             
-            csv += "\(filename),\(rating),\(escapedTags),\(duration),\(resolution),\(folder),\(escapedPath)\n"
+            csv += "\(filename),\(rating),\(escapedTags),\(duration),\(resolution),\(folder),\(ratingFolder),\(escapedPath)\n"
         }
         
         let csvURL = finalFolder.appendingPathComponent("rushcut.csv")
         try? csv.write(to: csvURL, atomically: true, encoding: .utf8)
         
-        // Remove moved clips from the store (they're no longer at their original paths)
-        let movedIDs = Set(clipsToExport.map { $0.id })
-        clips.removeAll { movedIDs.contains($0.id) }
-        for clip in clipsToExport {
+        // --- Clean up store: only remove clips that were successfully verified ---
+        clips.removeAll { successfullyMovedClipIDs.contains($0.id) }
+        for clip in clipsToExport where successfullyMovedClipIDs.contains(clip.id) {
             loadedURLs.remove(clip.url)
         }
         
