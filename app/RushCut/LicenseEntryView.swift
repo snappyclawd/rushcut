@@ -6,7 +6,7 @@ struct LicenseEntryView: View {
     @State private var keyInput = ""
     @State private var isActivating = false
 
-    private let purchaseURL = URL(string: "https://polar.sh/rushcut")! // TODO: Replace with actual Polar storefront URL
+    private let purchaseURL = URL(string: "https://buy.polar.sh/polar_cl_RxbniYtVRXvaC1WyS4oKO40QrAkYxOU5KWCcv1Co0xP")!
 
     var body: some View {
         VStack(spacing: 0) {

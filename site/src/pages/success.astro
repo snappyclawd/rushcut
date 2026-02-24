@@ -1,0 +1,82 @@
+---
+import Layout from '../layouts/Layout.astro'
+
+const logoSvg = `<svg viewBox="0 0 488 486" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M402.562 66.126H162.371l50.064 87.336a131.5 131.5 0 0 1 53.852-15.688c56.5 0 102.3 46.88 102.3 104.709 0 39.377-18.79 74.519-52.635 91.539l86.61 151.048c46.699 0 84.547-47.809 84.547-86.563V152.672c0-47.8-37.848-86.546-84.547-86.546Z" fill="currentColor"/>
+  <path d="M266.287 347.192c-56.5 0-102.302-46.88-102.302-104.709 0-24.634 10.243-47.284 22.242-65.148L84.548 0C37.854 0 0 38.753 0 86.546v245.836C0 380.187 37.854 418.939 84.548 418.939h240.193l-41.928-73.126a106.3 106.3 0 0 1-16.526 1.379Z" fill="currentColor"/>
+  <path fill-rule="evenodd" d="M265.691 267.402c-13.524 0-24.487-11.157-24.487-25.063 0-13.843 10.963-25.065 24.487-25.065 13.525 0 24.489 11.222 24.489 25.065 0 13.843-10.964 25.063-24.489 25.063Zm0-103.391c-42.263 0-76.524 35.259-76.524 78.328 0 43.257 34.261 78.327 76.524 78.327 42.266 0 76.527-35.07 76.527-78.327 0-43.259-34.261-78.328-76.527-78.328Z" fill="currentColor"/>
+</svg>`
+---
+
+<Layout title="Purchase complete — RushCut">
+
+  <section class="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <!-- Background effects -->
+    <div class="pointer-events-none absolute inset-0">
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] rounded-full bg-brand-500/[0.07] blur-[120px]"></div>
+      <div class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]"></div>
+    </div>
+
+    <div class="relative mx-auto max-w-xl px-6 text-center">
+      <!-- Animated checkmark -->
+      <div class="mx-auto mb-8 flex size-24 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/20">
+        <svg class="size-12 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+        </svg>
+      </div>
+
+      <!-- Logo -->
+      <div class="mx-auto mb-6 flex size-12 items-center justify-center text-brand-500">
+        <Fragment set:html={logoSvg} />
+      </div>
+
+      <h1 class="text-3xl font-extrabold tracking-tight sm:text-4xl">
+        You're in.
+      </h1>
+
+      <p class="mt-4 text-lg text-surface-400 leading-relaxed">
+        Thanks for buying RushCut. Check your email for your license key and download link.
+      </p>
+
+      <!-- Steps -->
+      <div class="mt-12 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-left">
+        <h2 class="text-sm font-bold uppercase tracking-widest text-brand-500 mb-6">Next steps</h2>
+        <ol class="space-y-5">
+          <li class="flex gap-4">
+            <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">1</div>
+            <div>
+              <h3 class="font-semibold">Download the app</h3>
+              <p class="mt-1 text-sm text-surface-500">Check your email for the download link. Open the .dmg and drag RushCut to your Applications folder.</p>
+            </div>
+          </li>
+          <li class="flex gap-4">
+            <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">2</div>
+            <div>
+              <h3 class="font-semibold">Enter your license key</h3>
+              <p class="mt-1 text-sm text-surface-500">Launch RushCut and paste the license key from your email. It starts with <code class="text-brand-400 font-mono text-xs">RUSHCUT_</code></p>
+            </div>
+          </li>
+          <li class="flex gap-4">
+            <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">3</div>
+            <div>
+              <h3 class="font-semibold">Start triaging</h3>
+              <p class="mt-1 text-sm text-surface-500">Drop a folder of clips into RushCut and get to work. Your footage isn't going to triage itself.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      <!-- Support note -->
+      <p class="mt-8 text-sm text-surface-600">
+        Questions? Email <a href="mailto:support@rushcut.app" class="text-brand-400 hover:text-brand-300 transition">support@rushcut.app</a>
+      </p>
+
+      <!-- Back to home -->
+      <a href="/" class="mt-6 inline-flex items-center gap-2 text-sm text-surface-500 transition hover:text-white">
+        <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/></svg>
+        Back to rushcut.app
+      </a>
+    </div>
+  </section>
+
+</Layout>
